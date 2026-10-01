@@ -8,6 +8,8 @@
   --green: #506c4e;
   --pale-green: #e8ede4;
   --orange: #cb7548;
+  --font-geist-sans: Arial, Helvetica, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, monospace;
 }
 
 @theme inline {
@@ -84,6 +86,58 @@ a { color: inherit; text-decoration: none; }
 .site-footer { display: flex; justify-content: space-between; gap: 16px; padding: 22px 0 30px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 .site-footer span:last-child span { margin-left: 4px; color: var(--orange); }
 
+.home-header-right { display: flex; align-items: center; }
+.account-nav { display: flex; align-items: center; gap: 22px; color: #62695f; font-size: 12px; }
+.account-nav > a:hover, .site-footer a:hover, .text-link:hover { color: var(--green); }
+.auth-control { display: flex; flex-direction: column; align-items: flex-end; }
+.button { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 10px; padding: 0 15px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font: inherit; font-size: 12px; transition: background 150ms ease, border-color 150ms ease; }
+.button:disabled { cursor: wait; opacity: 0.7; }
+.button-primary { background: var(--green); color: white; }
+.button-primary:hover:not(:disabled) { background: #405a3e; }
+.button-quiet { min-height: 34px; padding: 0; border: 0; background: transparent; color: #62695f; }
+.button-quiet:hover:not(:disabled) { color: var(--green); }
+.google-mark { width: 16px; height: 16px; }
+.auth-error { max-width: 300px; margin: 7px 0 0; color: #a3392f; font-size: 11px; text-align: right; }
+
+.account-intro { padding: 76px 0 43px; border-bottom: 1px solid var(--line); }
+.account-intro h1, .gated-card h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(48px, 7vw, 76px); font-weight: 400; line-height: 1; letter-spacing: -0.065em; }
+.account-intro h1 span, .gated-card h1 span { color: var(--green); font-style: italic; }
+.account-intro .intro-copy { margin-top: 16px; }
+.profile-panel { max-width: 760px; margin: 44px auto 76px; padding: clamp(22px, 5vw, 42px); border: 1px solid var(--line); border-radius: 5px; background: #fffefa; }
+.profile-panel-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+.profile-panel-heading .eyebrow { margin-bottom: 8px; }
+.profile-panel-heading h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 29px; font-weight: 400; letter-spacing: -0.04em; }
+.email-chip { max-width: 240px; overflow: hidden; padding: 8px 11px; border-radius: 99px; background: var(--pale-green); color: var(--green); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.profile-prompt { display: flex; align-items: flex-start; gap: 12px; margin: 22px 0; padding: 14px 16px; border: 1px solid #e7dcc9; border-radius: 4px; background: #fbf6ed; color: #755933; }
+.profile-prompt > span { color: var(--orange); }
+.profile-prompt p { margin: 0; font-size: 12px; line-height: 1.65; }
+.profile-form { padding-top: 25px; }
+.avatar-editor { display: flex; align-items: center; gap: 18px; margin-bottom: 27px; }
+.avatar-preview { display: grid; width: 78px; height: 78px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--pale-green); color: var(--green); font-family: Georgia, serif; font-size: 30px; }
+.avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+.upload-control { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; cursor: pointer; }
+.upload-control .eyebrow { margin: 0 0 2px; font-size: 9px; }
+.upload-link { color: var(--green); font-size: 12px; font-weight: 700; }
+.upload-help { color: var(--muted); font-size: 10px; }
+.upload-control input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+.upload-control:focus-within .upload-link { outline: 2px solid var(--green); outline-offset: 3px; }
+.profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.form-field { display: flex; flex-direction: column; gap: 8px; color: #555c53; font-size: 11px; font-weight: 700; }
+.form-field input { width: 100%; min-height: 45px; padding: 0 12px; border: 1px solid #dcdad2; border-radius: 3px; outline: none; background: #fff; color: var(--foreground); font: inherit; font-size: 13px; font-weight: 400; }
+.form-field input:focus { border-color: var(--green); box-shadow: 0 0 0 3px #506c4e1a; }
+.form-message { margin: 15px 0 0; font-size: 12px; line-height: 1.5; }
+.form-error { color: #a3392f; }
+.form-success { color: var(--green); }
+.save-button { min-width: 145px; margin-top: 23px; }
+.gated-card { max-width: 760px; margin: 78px auto 110px; padding: clamp(25px, 6vw, 54px); border: 1px solid var(--line); border-radius: 5px; background: #fffefa; }
+.gated-card .intro-copy { margin: 20px 0 0; }
+.gated-note { display: flex; align-items: flex-start; gap: 16px; margin: 37px 0 29px; padding: 20px; border-radius: 4px; background: #eef1e9; }
+.gated-star { color: var(--orange); font-size: 20px; }
+.gated-note .eyebrow { margin: 3px 0 9px; font-size: 9px; }
+.gated-note p:last-child { max-width: 480px; margin: 0; color: #5e665a; font-family: Georgia, serif; font-size: 18px; line-height: 1.5; }
+.text-link { color: var(--green); font-size: 12px; font-weight: 700; }
+.text-link span { padding-left: 5px; }
+
 @media (max-width: 760px) {
   .intro { padding: 70px 0 105px; }
   .collection-count { right: auto; bottom: 35px; left: 0; }
@@ -94,6 +148,10 @@ a { color: inherit; text-decoration: none; }
   .page-shell { width: min(100% - 32px, 1120px); }
   .site-header { height: 72px; }
   .header-label { font-size: 8px; }
+  .site-header:has(.account-nav) { gap: 12px; }
+  .account-nav { gap: 12px; font-size: 11px; }
+  .home-header-right .button { min-height: 36px; padding: 0 9px; font-size: 10px; }
+  .home-header-right .google-mark { display: none; }
   .intro { padding-top: 62px; }
   .intro h1 { font-size: clamp(43px, 12vw, 58px); }
   .intro-copy { font-size: 14px; }
@@ -103,4 +161,9 @@ a { color: inherit; text-decoration: none; }
   .caption-grid { grid-template-columns: 1fr; }
   .caption-card { min-height: 225px; }
   .site-footer { flex-direction: column; }
+  .profile-panel { margin: 28px auto 52px; }
+  .profile-panel-heading { align-items: flex-start; flex-direction: column; }
+  .profile-fields { grid-template-columns: 1fr; }
+  .account-intro { padding-top: 60px; }
+  .gated-card { margin: 52px auto 68px; }
 }

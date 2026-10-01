@@ -1,55 +1,6 @@
-type CaptionEntry = {
-  id: number;
-  caption: string;
-  humor_flavor: string;
-  prompt_name: string;
-  upvotes: number;
-  downvotes: number;
-  status: "draft" | "published" | "archived";
-  created_at: string;
-};
-
-async function getCaptionEntries(): Promise<{
-  entries: CaptionEntry[];
-  error: string | null;
-}> {
-  const projectUrl = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
-
-  if (!projectUrl || !anonKey) {
-    return {
-      entries: [],
-      error: "Add SUPABASE_URL and SUPABASE_ANON_KEY to your environment variables.",
-    };
-  }
-
-  try {
-    const response = await fetch(
-      `${projectUrl}/rest/v1/caption_entries?select=id,caption,humor_flavor,prompt_name,upvotes,downvotes,status,created_at&order=created_at.desc`,
-      {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-        },
-        cache: "no-store",
-      },
-    );
-
-    if (!response.ok) {
-      return {
-        entries: [],
-        error: `Supabase returned an error (${response.status}). Check that caption_entries exists and allows public reads.`,
-      };
-    }
-
-    return { entries: (await response.json()) as CaptionEntry[], error: null };
-  } catch {
-    return {
-      entries: [],
-      error: "Could not connect to Supabase. Check the project URL and try again.",
-    };
-  }
-}
+import Link from "next/link";
+import { GoogleSignInButton, SignOutButton } from "@/app/auth-controls";
+import { createClient } from "@/lib/supabase/server";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -60,16 +11,35 @@ function formatDate(value: string) {
 }
 
 export default async function Home() {
-  const { entries, error } = await getCaptionEntries();
+  const supabase = await createClient();
+  const [{ data: { user } }, { data: entries, error: captionsError }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from("caption_entries")
+      .select("id,caption,humor_flavor,prompt_name,upvotes,downvotes,status,created_at")
+      .order("created_at", { ascending: false }),
+  ]);
+  const error = captionsError
+    ? "Check that caption_entries exists and allows public reads."
+    : null;
+  const captionEntries = entries ?? [];
 
   return (
     <main className="page-shell">
       <header className="site-header">
-        <a className="wordmark" href="#top" aria-label="Side Notes home">
+        <Link className="wordmark" href="#top" aria-label="Side Notes home">
           <span className="wordmark-icon" aria-hidden="true">S</span>
           side notes
-        </a>
-        <span className="header-label">A tiny humor archive</span>
+        </Link>
+        <div className="home-header-right">
+          {user ? (
+            <nav className="account-nav" aria-label="Account navigation">
+              <Link href="/inside">Members</Link>
+              <Link href="/profile">Profile</Link>
+              <SignOutButton />
+            </nav>
+          ) : <GoogleSignInButton />}
+        </div>
       </header>
 
       <section className="intro" id="top">
@@ -80,7 +50,7 @@ export default async function Home() {
           familiar absurdities of student life.
         </p>
         <div className="collection-count">
-          <span className="count-number">{entries.length.toString().padStart(2, "0")}</span>
+          <span className="count-number">{captionEntries.length.toString().padStart(2, "0")}</span>
           <span className="count-label">captions in the collection</span>
         </div>
       </section>
@@ -102,7 +72,7 @@ export default async function Home() {
               <p>{error}</p>
             </div>
           </div>
-        ) : entries.length === 0 ? (
+        ) : captionEntries.length === 0 ? (
           <div className="message-card">
             <span className="message-icon" aria-hidden="true">✳</span>
             <div>
@@ -112,7 +82,7 @@ export default async function Home() {
           </div>
         ) : (
           <div className="caption-grid">
-            {entries.map((entry, index) => (
+            {captionEntries.map((entry, index) => (
               <article className="caption-card" key={entry.id}>
                 <div className="card-topline">
                   <span className="card-index">NOTE {String(index + 1).padStart(2, "0")}</span>
