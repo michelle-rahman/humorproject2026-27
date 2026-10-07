@@ -1,6 +1,24 @@
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { GoogleSignInButton, SignOutButton } from "@/app/auth-controls";
 import { createClient } from "@/lib/supabase/server";
+import VoteButtons from "@/app/vote-buttons";
+
+type CaptionGeneration = {
+  id: string;
+  caption_text: string;
+  humor_style: string;
+  upvotes: number;
+  downvotes: number;
+  created_at: string;
+};
+
+const STYLE_LABELS: Record<string, string> = {
+  campus_lore: "Campus & city lore",
+  observational: "Sharp observation",
+  absurdist: "Playful absurdity",
+  wholesome: "Warm and wholesome",
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -11,18 +29,39 @@ function formatDate(value: string) {
 }
 
 export default async function Home() {
-  const supabase = await createClient();
-  const [{ data: { user } }, { data: entries, error: captionsError }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from("caption_entries")
-      .select("id,caption,humor_flavor,prompt_name,upvotes,downvotes,status,created_at")
-      .order("created_at", { ascending: false }),
-  ]);
-  const error = captionsError
-    ? "Check that caption_entries exists and allows public reads."
-    : null;
-  const captionEntries = entries ?? [];
+  let user: User | null = null;
+  let generations: CaptionGeneration[] = [];
+  let votesByGeneration: Record<string, number> = {};
+  let feedError: string | null = null;
+
+  try {
+    const supabase = await createClient();
+    const { data: userData } = await supabase.auth.getUser();
+    user = userData.user;
+
+    const { data, error } = await supabase
+      .from("caption_generations")
+      .select("id,caption_text,humor_style,upvotes,downvotes,created_at")
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (error) throw error;
+    generations = (data ?? []) as CaptionGeneration[];
+
+    if (user) {
+      const { data: votes, error: votesError } = await supabase
+        .from("caption_votes")
+        .select("generation_id,vote")
+        .eq("user_id", user.id);
+      if (votesError) throw votesError;
+      votesByGeneration = Object.fromEntries(
+        (votes ?? []).map((vote) => [vote.generation_id, vote.vote]),
+      );
+    }
+  } catch (error) {
+    console.error("Caption feed could not load", error instanceof Error ? error.name : "UnknownError");
+    feedError = "The caption feed is temporarily unavailable. Confirm that the Assignment 4 SQL has been run in Supabase.";
+  }
 
   return (
     <main className="page-shell">
@@ -46,65 +85,85 @@ export default async function Home() {
         <p className="eyebrow"><span className="status-dot" /> THE CAPTION COLLECTION</p>
         <h1>Little observations.<br /><span>Big campus energy.</span></h1>
         <p className="intro-copy">
-          A growing collection of AI-generated captions inspired by the small,
-          familiar absurdities of student life.
+          Side Notes turns campus and city moments into captions, then lets the
+          community decide what lands. New York is weird enough already.
         </p>
         <div className="collection-count">
-          <span className="count-number">{captionEntries.length.toString().padStart(2, "0")}</span>
-          <span className="count-label">captions in the collection</span>
+          <span className="count-number">{generations.length.toString().padStart(2, "0")}</span>
+          <span className="count-label">community captions</span>
         </div>
       </section>
 
       <section className="collection" aria-labelledby="collection-heading">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">FRESH FROM THE DATABASE</p>
+            <p className="eyebrow">MADE HERE, RATED HERE</p>
             <h2 id="collection-heading">The latest notes</h2>
           </div>
-          <span className="live-label"><span className="status-dot" /> LIVE COLLECTION</span>
+          <div className="feed-actions">
+            <span className="live-label"><span className="status-dot" /> LIVE FEED</span>
+            {user && <Link className="button button-primary create-cta" href="/create">Make a caption <span aria-hidden="true">↗</span></Link>}
+          </div>
         </div>
 
-        {error ? (
+        {feedError ? (
           <div className="message-card" role="status">
             <span className="message-icon" aria-hidden="true">!</span>
             <div>
               <h3>We couldn’t load the captions.</h3>
-              <p>{error}</p>
+              <p>{feedError}</p>
             </div>
           </div>
-        ) : captionEntries.length === 0 ? (
-          <div className="message-card">
+        ) : generations.length === 0 ? (
+          <div className="message-card empty-feed">
             <span className="message-icon" aria-hidden="true">✳</span>
             <div>
-              <h3>The collection is waiting for its first note.</h3>
-              <p>Add a row to <code>caption_entries</code> in Supabase and it will show up here.</p>
+              <h3>The feed is waiting for its first caption.</h3>
+              <p>{user ? "Make the first note from a small campus or city moment." : "Sign in, make a caption, and start the collection."}</p>
+              {user
+                ? <Link className="text-link" href="/create">Open the prompt studio →</Link>
+                : <span className="feed-signin-note">Use Continue with Google above to join.</span>}
             </div>
           </div>
         ) : (
           <div className="caption-grid">
-            {captionEntries.map((entry, index) => (
-              <article className="caption-card" key={entry.id}>
+            {generations.map((generation, index) => (
+              <article className="caption-card" key={generation.id}>
                 <div className="card-topline">
                   <span className="card-index">NOTE {String(index + 1).padStart(2, "0")}</span>
-                  <span className={`status-tag status-${entry.status}`}>{entry.status}</span>
+                  <span className="status-tag status-published">AI GENERATED</span>
                 </div>
-                <p className="caption-text">“{entry.caption}”</p>
+                <p className="caption-text">“{generation.caption_text}”</p>
                 <div className="tag-row">
-                  <span className="flavor-tag">{entry.humor_flavor}</span>
-                  <span className="prompt-label">{entry.prompt_name}</span>
+                  <span className="flavor-tag">{STYLE_LABELS[generation.humor_style] ?? generation.humor_style}</span>
+                  <span className="prompt-label">Side Notes caption engine</span>
                 </div>
                 <footer className="card-footer">
-                  <span>{formatDate(entry.created_at)}</span>
-                  <span className="votes" aria-label={`${entry.upvotes} upvotes and ${entry.downvotes} downvotes`}>
-                    <span>↑ {entry.upvotes}</span>
-                    <span>↓ {entry.downvotes}</span>
-                  </span>
+                  <span>{formatDate(generation.created_at)}</span>
+                  <VoteButtons
+                    key={`${generation.id}-${generation.upvotes}-${generation.downvotes}-${votesByGeneration[generation.id] ?? "none"}`}
+                    generationId={generation.id}
+                    initialUpvotes={generation.upvotes}
+                    initialDownvotes={generation.downvotes}
+                    initialVote={votesByGeneration[generation.id] ?? null}
+                    signedIn={Boolean(user)}
+                  />
                 </footer>
               </article>
             ))}
           </div>
         )}
       </section>
+
+      {!user && (
+        <section className="join-banner">
+          <div>
+            <p className="eyebrow">HAVE A SCENE IN MIND?</p>
+            <p>Sign in to make a caption and rate what the community creates.</p>
+          </div>
+          <GoogleSignInButton />
+        </section>
+      )}
 
       <footer className="site-footer">
         <span>Made for the moments between classes.</span>

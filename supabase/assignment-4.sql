@@ -1,0 +1,208 @@
+-- Assignment 4: create AI captions, publish them in a shared feed, and rate them.
+-- Run in Supabase Dashboard > SQL Editor after assignment-3.sql.
+-- This turns RLS on for every existing public table, removes old policies, and
+-- then grants the minimum access needed by this app.
+
+create table if not exists public.caption_generations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  humor_style text not null check (humor_style in ('observational', 'absurdist', 'wholesome', 'campus_lore')),
+  caption_text text not null check (char_length(caption_text) between 1 and 500),
+  upvotes integer not null default 0 check (upvotes >= 0),
+  downvotes integer not null default 0 check (downvotes >= 0),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.caption_generation_details (
+  generation_id uuid primary key references public.caption_generations (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  source_text text not null check (char_length(source_text) between 8 and 500),
+  prompt_text text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.caption_votes (
+  id uuid primary key default gen_random_uuid(),
+  generation_id uuid not null references public.caption_generations (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  vote smallint not null check (vote in (-1, 1)),
+  created_at timestamptz not null default now(),
+  unique (generation_id, user_id)
+);
+
+-- Turn RLS on and clear old policies on all app tables in public. This is
+-- important because PostgreSQL combines permissive policies with OR semantics.
+do $$
+declare
+  app_table record;
+  old_policy record;
+begin
+  for app_table in
+    select tablename from pg_tables where schemaname = 'public'
+  loop
+    execute format('alter table public.%I enable row level security', app_table.tablename);
+    execute format('revoke all on table public.%I from public, anon, authenticated', app_table.tablename);
+
+    for old_policy in
+      select policyname from pg_policies
+      where schemaname = 'public' and tablename = app_table.tablename
+    loop
+      execute format('drop policy if exists %I on public.%I', old_policy.policyname, app_table.tablename);
+    end loop;
+  end loop;
+end;
+$$;
+
+-- The old sample archive remains public and read-only. The app feed uses the
+-- new caption_generations table below.
+grant select on public.caption_entries to anon, authenticated;
+create policy "Public can read the caption archive"
+  on public.caption_entries for select to anon, authenticated
+  using (true);
+
+-- Each user can only read or edit their own profile.
+grant select, insert, update on public.profiles to authenticated;
+create policy "Users can read their own profile"
+  on public.profiles for select to authenticated
+  using ((select auth.uid()) = id);
+create policy "Users can create their own profile"
+  on public.profiles for insert to authenticated
+  with check ((select auth.uid()) = id);
+create policy "Users can update their own profile"
+  on public.profiles for update to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+-- Anyone can read published captions and their aggregate counts. The owner ID
+-- is deliberately not selectable; source text and prompts live in a private table.
+grant select (id, humor_style, caption_text, upvotes, downvotes, created_at)
+  on public.caption_generations to anon, authenticated;
+create policy "Anyone can read generated captions"
+  on public.caption_generations for select to anon, authenticated
+  using (true);
+
+-- Owners may inspect their own source and prompt, but cannot insert or mutate
+-- details directly. New generations are created atomically through an RPC below.
+grant select (generation_id, source_text, prompt_text, created_at)
+  on public.caption_generation_details to authenticated;
+create policy "Users can read their own generation details"
+  on public.caption_generation_details for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+-- Individual vote records are private to their voter. One vote per user and
+-- caption; users can change their own vote, and cannot delete another's.
+grant select (id, generation_id, user_id, vote, created_at),
+      insert (generation_id, user_id, vote),
+      update (vote)
+  on public.caption_votes to authenticated;
+create policy "Users can read their own votes"
+  on public.caption_votes for select to authenticated
+  using ((select auth.uid()) = user_id);
+create policy "Users can cast their own vote"
+  on public.caption_votes for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+create policy "Users can change their own vote"
+  on public.caption_votes for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create index if not exists caption_generations_created_at_idx
+  on public.caption_generations (created_at desc);
+create index if not exists caption_votes_generation_id_idx
+  on public.caption_votes (generation_id);
+
+-- The Gemini server route calls this function so generation and its private
+-- source/prompt details are inserted together in one transaction.
+create or replace function public.publish_caption_generation(
+  p_source_text text,
+  p_humor_style text,
+  p_prompt_text text,
+  p_caption_text text
+)
+returns table (
+  id uuid,
+  caption_text text,
+  humor_style text,
+  upvotes integer,
+  downvotes integer,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  new_generation_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  if p_source_text is null or char_length(trim(p_source_text)) not between 8 and 500 then
+    raise exception 'Scene must be between 8 and 500 characters' using errcode = '22023';
+  end if;
+  if p_humor_style not in ('observational', 'absurdist', 'wholesome', 'campus_lore') then
+    raise exception 'Unsupported humor style' using errcode = '22023';
+  end if;
+  if p_prompt_text is null or char_length(p_prompt_text) > 4000 then
+    raise exception 'Invalid prompt' using errcode = '22023';
+  end if;
+  if p_caption_text is null or char_length(trim(p_caption_text)) not between 1 and 500 then
+    raise exception 'Invalid caption' using errcode = '22023';
+  end if;
+
+  insert into public.caption_generations (user_id, humor_style, caption_text)
+  values (current_user_id, p_humor_style, trim(p_caption_text))
+  returning caption_generations.id into new_generation_id;
+
+  insert into public.caption_generation_details (generation_id, user_id, source_text, prompt_text)
+  values (new_generation_id, current_user_id, trim(p_source_text), p_prompt_text);
+
+  return query
+  select g.id, g.caption_text, g.humor_style, g.upvotes, g.downvotes, g.created_at
+  from public.caption_generations as g
+  where g.id = new_generation_id;
+end;
+$$;
+
+revoke all on function public.publish_caption_generation(text, text, text, text) from public, anon;
+grant execute on function public.publish_caption_generation(text, text, text, text) to authenticated;
+
+-- Update public totals from the private vote table. The SECURITY DEFINER trigger
+-- is the only path that changes the aggregate columns.
+create or replace function public.apply_caption_vote_counts()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.caption_generations
+    set upvotes = upvotes + case when new.vote = 1 then 1 else 0 end,
+        downvotes = downvotes + case when new.vote = -1 then 1 else 0 end
+    where id = new.generation_id;
+    return new;
+  end if;
+
+  update public.caption_generations
+  set upvotes = upvotes
+        - case when old.vote = 1 then 1 else 0 end
+        + case when new.vote = 1 then 1 else 0 end,
+      downvotes = downvotes
+        - case when old.vote = -1 then 1 else 0 end
+        + case when new.vote = -1 then 1 else 0 end
+  where id = new.generation_id;
+  return new;
+end;
+$$;
+
+revoke all on function public.apply_caption_vote_counts() from public, anon, authenticated;
+drop trigger if exists caption_votes_update_counts on public.caption_votes;
+create trigger caption_votes_update_counts
+  after insert or update on public.caption_votes
+  for each row execute function public.apply_caption_vote_counts();
+
+-- Supabase Storage objects already use RLS. Keep the Assignment 3 avatar
+-- policies and ensure row-level security is enabled on the managed object table.
+alter table storage.objects enable row level security;
