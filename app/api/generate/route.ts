@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+export const maxDuration = 60;
 
 type CaptionOption = { top: string; bottom: string };
 
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
           },
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(55_000),
       },
     );
 
@@ -119,7 +120,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: reason }, { status: 502 });
     }
 
-    const result = await response.json();
+    let result: {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
+    try {
+      result = await response.json();
+    } catch {
+      console.error("Gemini returned a non-JSON success response");
+      return NextResponse.json(
+        { error: "Gemini returned an unreadable response. Please try again." },
+        { status: 502 },
+      );
+    }
     const rawText = result.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text ?? "")
       .join("")
@@ -128,7 +142,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No captions came back. Try another image." }, { status: 502 });
     }
 
-    const parsed = JSON.parse(rawText) as { captions?: CaptionOption[] };
+    let parsed: { captions?: CaptionOption[] };
+    try {
+      parsed = JSON.parse(rawText) as { captions?: CaptionOption[] };
+    } catch {
+      console.error("Gemini returned invalid JSON for generated captions");
+      return NextResponse.json(
+        { error: "Gemini returned captions in an unreadable format. Please try again." },
+        { status: 502 },
+      );
+    }
     const captions = Array.isArray(parsed.captions)
       ? parsed.captions.slice(0, 3).map((caption) => ({
           top: typeof caption.top === "string" ? caption.top.trim().slice(0, 160) : "",
@@ -142,7 +165,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ captions, imagePath, context, promptText });
   } catch (error) {
-    console.error("Gemini request could not be completed", error instanceof Error ? error.name : "UnknownError");
-    return NextResponse.json({ error: "Could not reach the caption generator. Try again." }, { status: 502 });
+    const errorName = error instanceof Error ? error.name : "UnknownError";
+    console.error("Gemini request could not be completed", errorName);
+    if (errorName === "TimeoutError") {
+      return NextResponse.json(
+        { error: "Gemini took too long to respond. Please try again." },
+        { status: 504 },
+      );
+    }
+    return NextResponse.json(
+      { error: "The app could not connect to Gemini. Check this deployment's Runtime Logs." },
+      { status: 502 },
+    );
   }
 }
