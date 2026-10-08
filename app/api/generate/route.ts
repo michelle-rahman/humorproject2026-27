@@ -93,46 +93,69 @@ export async function POST(request: Request) {
   try {
     const base64Image = Buffer.from(await image.arrayBuffer()).toString("base64");
     const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [{
-            role: "user",
-            parts: [
-              { inline_data: { mime_type: image.type, data: base64Image } },
-              { text: promptText },
-            ],
-          }],
-          generationConfig: {
-            temperature: 1,
-            maxOutputTokens: 500,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "object",
-              properties: {
-                captions: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      top: { type: "string" },
-                      bottom: { type: "string" },
-                    },
-                    required: ["top", "bottom"],
-                  },
+    const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ||
+      (model === "gemini-3.7-flash" ? "gemini-3.6-flash" : "gemini-3.7-flash");
+    const requestBody = JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [
+          { inline_data: { mime_type: image.type, data: base64Image } },
+          { text: promptText },
+        ],
+      }],
+      generationConfig: {
+        temperature: 1,
+        maxOutputTokens: 500,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            captions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  top: { type: "string" },
+                  bottom: { type: "string" },
                 },
+                required: ["top", "bottom"],
               },
-              required: ["captions"],
             },
           },
-        }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(55_000),
+          required: ["captions"],
+        },
       },
-    );
+    });
+
+    const models = [...new Set([model, fallbackModel])];
+    const deadline = Date.now() + 55_000;
+    let response: Response | undefined;
+    for (const [index, modelName] of models.entries()) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
+
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: requestBody,
+          cache: "no-store",
+          signal: AbortSignal.timeout(Math.min(remainingMs, 30_000)),
+        },
+      );
+
+      if (response.status !== 503 || index === models.length - 1) break;
+      console.warn("Gemini model unavailable; trying fallback", modelName);
+      await response.body?.cancel();
+    }
+
+    if (!response) {
+      return NextResponse.json(
+        { error: "Gemini could not start caption generation. Please try again." },
+        { status: 503 },
+      );
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null) as {
