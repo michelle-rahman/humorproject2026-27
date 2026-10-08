@@ -7,6 +7,41 @@ export const maxDuration = 60;
 
 type CaptionOption = { top: string; bottom: string };
 
+function parseJsonObject(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    if (start < 0) throw new Error("No JSON object in model response");
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < cleaned.length; index += 1) {
+      const character = cleaned[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+        continue;
+      }
+      if (character === '"') inString = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) return JSON.parse(cleaned.slice(start, index + 1));
+      }
+    }
+    throw new Error("Incomplete JSON object in model response");
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -144,11 +179,11 @@ export async function POST(request: Request) {
 
     let parsed: { captions?: CaptionOption[] };
     try {
-      parsed = JSON.parse(rawText) as { captions?: CaptionOption[] };
+      parsed = parseJsonObject(rawText) as { captions?: CaptionOption[] };
     } catch {
       console.error("Gemini returned invalid JSON for generated captions");
       return NextResponse.json(
-        { error: "Gemini returned captions in an unreadable format. Please try again." },
+        { error: "Gemini's response did not contain complete caption data. Please try again." },
         { status: 502 },
       );
     }
