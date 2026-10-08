@@ -62,7 +62,6 @@ export default async function Home({
     const { data, error } = await supabase
       .from("caption_generations")
       .select("id,image_path,caption_text,humor_style,upvotes,downvotes,created_at")
-      .not("image_path", "is", null)
       .order("created_at", { ascending: false })
       .limit(30);
 
@@ -98,7 +97,7 @@ export default async function Home({
             Welcome back{firstName ? `, ${firstName}` : ""}.
           </p>
         )}
-        <p className="intro-copy">Give AI an image and some context. It takes a shot at the meme. You be the judge.</p>
+        <p className="intro-copy">Give AI a topic, or add an image and context. It makes the meme; you be the judge.</p>
         {user ? (
           <Link className="button button-primary hero-cta" href="/create">Create a meme</Link>
         ) : (
@@ -111,7 +110,7 @@ export default async function Home({
           <div>
             <p className="eyebrow">FEED</p>
             <h2 id="collection-heading">The feed</h2>
-            <p className="feed-description">AI-generated memes, rated by people.</p>
+            <p className="feed-description">Text-only captions and image memes, rated by people.</p>
           </div>
         </div>
 
@@ -134,22 +133,27 @@ export default async function Home({
           <div className="caption-grid">
             {generations.map((generation) => (
               <article className="caption-card" key={generation.id}>
-                <div className="meme-image-wrap">
-                  {generation.image_path && (
+                {generation.image_path ? (
+                  <div className="meme-image-wrap">
                     <img
                       className="meme-image"
                       src={`/api/meme-image?path=${encodeURIComponent(generation.image_path)}`}
                       alt="User-submitted meme image"
                     />
-                  )}
-                  <div className="meme-overlay" aria-label={generation.caption_text.replace("\n", ". ")}>
-                    {generation.caption_text.split("\n").map((line, lineIndex) => (
-                      <span className={lineIndex === 0 ? "meme-top-text" : "meme-bottom-text"} key={`${generation.id}-${lineIndex}`}>
-                        {line}
-                      </span>
-                    ))}
+                    <div className="meme-overlay" aria-label={generation.caption_text.replace("\n", ". ")}>
+                      {generation.caption_text.split("\n").map((line, lineIndex) => (
+                        <span className={lineIndex === 0 ? "meme-top-text" : "meme-bottom-text"} key={`${generation.id}-${lineIndex}`}>
+                          {line}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="caption-only-wrap">
+                    <span className="caption-only-label">CAPTION ONLY</span>
+                    <p>{generation.caption_text}</p>
+                  </div>
+                )}
                 <footer className="card-footer">
                   <span>{formatDate(generation.created_at)}</span>
                   <VoteButtons

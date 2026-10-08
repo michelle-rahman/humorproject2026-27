@@ -213,10 +213,14 @@ begin
   if p_caption_text is null or char_length(trim(p_caption_text)) not between 1 and 500 then
     raise exception 'Invalid caption' using errcode = '22023';
   end if;
-  if p_image_path is null
-     or left(p_image_path, char_length(current_user_id::text) + 1)
+  if p_image_path is not null
+     and left(p_image_path, char_length(current_user_id::text) + 1)
        <> (current_user_id::text || '/') then
     raise exception 'Image must belong to the signed-in user' using errcode = '42501';
+  end if;
+  if p_image_path is null
+     and (p_source_text is null or char_length(trim(p_source_text)) < 3) then
+    raise exception 'A topic is required for caption-only memes' using errcode = '22023';
   end if;
 
   insert into public.caption_generations (user_id, image_path, humor_style, caption_text)

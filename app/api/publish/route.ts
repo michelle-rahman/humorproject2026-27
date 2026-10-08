@@ -21,14 +21,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Choose a caption before publishing." }, { status: 400 });
   }
 
-  const imagePath = typeof body.imagePath === "string" ? body.imagePath : "";
+  const imagePath = typeof body.imagePath === "string" ? body.imagePath : null;
   const context = typeof body.context === "string" ? body.context.trim() : "";
   const promptText = typeof body.promptText === "string" ? body.promptText : "";
   const top = typeof body.top === "string" ? body.top.trim() : "";
   const bottom = typeof body.bottom === "string" ? body.bottom.trim() : "";
 
-  if (!imagePath.startsWith(`${user.id}/`) || imagePath.includes("..")) {
+  if (body.imagePath != null && typeof body.imagePath !== "string") {
     return NextResponse.json({ error: "That image could not be accessed." }, { status: 400 });
+  }
+  if (imagePath && (!imagePath.startsWith(`${user.id}/`) || imagePath.includes(".."))) {
+    return NextResponse.json({ error: "That image could not be accessed." }, { status: 400 });
+  }
+  if (!imagePath && context.length < 3) {
+    return NextResponse.json({ error: "Add a topic or situation before publishing a caption-only meme." }, { status: 400 });
   }
   if (context.length > 500) {
     return NextResponse.json({ error: "Keep context under 500 characters." }, { status: 400 });
@@ -40,11 +46,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Caption prompt is missing. Generate again." }, { status: 400 });
   }
 
-  const { error: imageError } = await supabase.storage
-    .from("meme-images")
-    .download(imagePath);
-  if (imageError) {
-    return NextResponse.json({ error: "Could not access the uploaded image. Generate again." }, { status: 400 });
+  if (imagePath) {
+    const { error: imageError } = await supabase.storage
+      .from("meme-images")
+      .download(imagePath);
+    if (imageError) {
+      return NextResponse.json({ error: "Could not access the uploaded image. Generate again." }, { status: 400 });
+    }
   }
 
   const { data: savedRows, error } = await supabase.rpc("publish_caption_generation", {

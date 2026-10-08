@@ -56,33 +56,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Choose an image first." }, { status: 400 });
   }
 
-  const imagePath = typeof body.imagePath === "string" ? body.imagePath : "";
+  const imagePath = typeof body.imagePath === "string" ? body.imagePath : null;
   const context = typeof body.context === "string" ? body.context.trim() : "";
-  if (!imagePath.startsWith(`${user.id}/`) || imagePath.includes("..")) {
+  if (body.imagePath != null && typeof body.imagePath !== "string") {
+    return NextResponse.json({ error: "That image could not be accessed." }, { status: 400 });
+  }
+  if (imagePath && (!imagePath.startsWith(`${user.id}/`) || imagePath.includes(".."))) {
     return NextResponse.json({ error: "That image could not be accessed." }, { status: 400 });
   }
   if (context.length > 500) {
     return NextResponse.json({ error: "Keep context under 500 characters." }, { status: 400 });
   }
-
-  const { data: image, error: imageError } = await supabase.storage
-    .from("meme-images")
-    .download(imagePath);
-  if (imageError || !image) {
-    return NextResponse.json({ error: "Could not load that image. Try uploading it again." }, { status: 400 });
+  if (!imagePath && context.length < 3) {
+    return NextResponse.json({ error: "Add a topic or situation for caption-only generation." }, { status: 400 });
   }
-  if (!IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_BYTES) {
-    return NextResponse.json({ error: "Use a JPG, PNG, or WebP image under 5 MB." }, { status: 400 });
+
+  let image: Blob | null = null;
+  if (imagePath) {
+    const { data, error: imageError } = await supabase.storage
+      .from("meme-images")
+      .download(imagePath);
+    if (imageError || !data) {
+      return NextResponse.json({ error: "Could not load that image. Try uploading it again." }, { status: 400 });
+    }
+    image = data;
+    if (!IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Use a JPG, PNG, or WebP image under 5 MB." }, { status: 400 });
+    }
   }
 
   const promptText = [
-    "Look closely at the attached image and write three distinct, genuinely funny meme captions about what is actually visible. The goal is to test whether AI can be funny; do not claim that the result is funny or explain the joke.",
+    imagePath
+      ? "Look closely at the attached image and write three distinct, genuinely funny meme captions about what is actually visible."
+      : "Write three distinct, genuinely funny meme captions based on the topic or situation supplied by the user. Each caption should stand on its own without an image.",
+    "The goal is to test whether AI can be funny; do not claim that the result is funny or explain the joke.",
     "Avoid stock meme formats, familiar internet catchphrases, generic observations, and forced punchlines. Prefer precise, surprising details and concise writing. If context is provided, use it as the angle rather than merely repeating it.",
     "Return only valid JSON in this shape: {\"captions\":[{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"}]}.",
     "Each option has a short top line and a short bottom line. Keep the language natural, specific, dry, and concise.",
     "Give each option a different joke or observation. Avoid familiar meme templates, catchphrases, generic campus or city jokes, emojis, hashtags, and forced slang.",
     "Do not guess a person's identity, private traits, or feelings. Do not make the person the target of the joke.",
-    `Additional context from the uploader: ${context || "None."}`,
+    `${imagePath ? "Additional context from the uploader" : "Topic or situation from the user"}: ${context || "None."}`,
   ].join("\n");
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -91,7 +104,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const base64Image = Buffer.from(await image.arrayBuffer()).toString("base64");
+    const base64Image = image ? Buffer.from(await image.arrayBuffer()).toString("base64") : null;
     const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
     const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ||
       (model === "gemini-3.7-flash" ? "gemini-3.6-flash" : "gemini-3.7-flash");
@@ -99,7 +112,7 @@ export async function POST(request: Request) {
       contents: [{
         role: "user",
         parts: [
-          { inline_data: { mime_type: image.type, data: base64Image } },
+          ...(image && base64Image ? [{ inline_data: { mime_type: image.type, data: base64Image } }] : []),
           { text: promptText },
         ],
       }],

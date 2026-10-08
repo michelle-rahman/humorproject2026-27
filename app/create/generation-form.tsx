@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type CaptionOption = { top: string; bottom: string };
+type GenerationType = "caption-only" | "image-caption";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_EXTENSIONS: Record<string, string> = {
@@ -16,6 +17,7 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
 
 export default function GenerationForm() {
   const router = useRouter();
+  const [generationType, setGenerationType] = useState<GenerationType>("image-caption");
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [imagePath, setImagePath] = useState<string | null>(null);
@@ -87,7 +89,7 @@ export default function GenerationForm() {
     setWorking(true);
 
     try {
-      const path = await uploadPhoto();
+      const path = generationType === "image-caption" ? await uploadPhoto() : null;
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +110,7 @@ export default function GenerationForm() {
 
   async function publish() {
     const caption = captions[selectedCaption];
-    if (!caption || !imagePath) return;
+    if (!caption || (generationType === "image-caption" && !imagePath)) return;
     setError(null);
     setWorking(true);
 
@@ -116,7 +118,12 @@ export default function GenerationForm() {
       const response = await fetch("/api/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagePath, context, promptText, ...caption }),
+        body: JSON.stringify({
+          imagePath: generationType === "image-caption" ? imagePath : null,
+          context,
+          promptText,
+          ...caption,
+        }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not publish this meme.");
@@ -132,26 +139,73 @@ export default function GenerationForm() {
   return (
     <div className="meme-maker">
       <form className="generator-form" onSubmit={generate}>
-        <label className="form-field" htmlFor="meme-image">
-          <span>Image</span>
-          <input
-            id="meme-image"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={choosePhoto}
-            required
-            type="file"
-          />
-          <span className="character-count">JPG, PNG, or WebP · up to 5 MB</span>
-        </label>
+        <fieldset className="generation-modes">
+          <legend>Choose a format</legend>
+          <label className={generationType === "caption-only" ? "is-active" : ""}>
+            <input
+              checked={generationType === "caption-only"}
+              name="generation-type"
+              onChange={() => {
+                setGenerationType("caption-only");
+                setCaptions([]);
+                setPromptText("");
+                setPublished(false);
+                setError(null);
+              }}
+              type="radio"
+              value="caption-only"
+            />
+            <span>Caption only</span>
+            <small>Start with a topic or situation.</small>
+          </label>
+          <label className={generationType === "image-caption" ? "is-active" : ""}>
+            <input
+              checked={generationType === "image-caption"}
+              name="generation-type"
+              onChange={() => {
+                setGenerationType("image-caption");
+                setCaptions([]);
+                setPromptText("");
+                setPublished(false);
+                setError(null);
+              }}
+              type="radio"
+              value="image-caption"
+            />
+            <span>Image + captions</span>
+            <small>Upload a photo for AI to caption.</small>
+          </label>
+        </fieldset>
 
-        {preview && (
-          <div className="image-preview-wrap">
-            <img className="image-preview" src={preview} alt="Selected upload preview" />
-          </div>
+        {generationType === "image-caption" && (
+          <>
+            <label className="form-field" htmlFor="meme-image">
+              <span>Image</span>
+              <input
+                id="meme-image"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={choosePhoto}
+                required
+                type="file"
+              />
+              <span className="character-count">JPG, PNG, or WebP · up to 5 MB</span>
+            </label>
+
+            {preview && (
+              <div className="image-preview-wrap">
+                <img className="image-preview" src={preview} alt="Selected upload preview" />
+              </div>
+            )}
+          </>
         )}
 
         <label className="form-field" htmlFor="image-context">
-          <span>Topic or context <span className="optional-label">Optional</span></span>
+          <span>
+            {generationType === "caption-only" ? "Topic or situation" : "Topic or context"}
+            {generationType === "caption-only"
+              ? <span className="optional-label">Required</span>
+              : <span className="optional-label">Optional</span>}
+          </span>
           <textarea
             id="image-context"
             maxLength={500}
@@ -161,7 +215,10 @@ export default function GenerationForm() {
               setPromptText("");
               setPublished(false);
             }}
-            placeholder="A place, situation, inside joke, or detail to riff on"
+            placeholder={generationType === "caption-only"
+              ? "A situation, opinion, or small annoyance for AI to turn into a meme"
+              : "A place, situation, inside joke, or detail to riff on"}
+            required={generationType === "caption-only"}
             rows={2}
             value={context}
           />
@@ -169,8 +226,14 @@ export default function GenerationForm() {
 
         {error && <p className="form-message form-error" role="alert">{error}</p>}
 
-        <button className="button button-primary generate-button" disabled={working || !photo} type="submit">
-          {working && captions.length === 0 ? "Giving it a shot…" : "Ask AI for memes"}
+        <button
+          className="button button-primary generate-button"
+          disabled={working || (generationType === "image-caption" ? !photo : !context.trim())}
+          type="submit"
+        >
+          {working && captions.length === 0
+            ? "Giving it a shot…"
+            : generationType === "caption-only" ? "Generate captions" : "Generate image captions"}
         </button>
       </form>
 

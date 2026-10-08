@@ -35,7 +35,7 @@ export default async function MembersPage() {
         <h1 id="member-home-title">Is AI funny?</h1>
         <p className="member-greeting">Welcome back{name ? `, ${name}` : ""}.</p>
         <p className="intro-copy">
-          Upload an image and add a topic or context. AI writes three captions; pick one to publish, then vote on other posts. The point is to find out whether AI can make a funny meme.
+          Start with a topic for a text-only meme, or add an image and context for an image meme. AI writes three captions; pick one to publish, then vote on other posts. The question is whether AI can make a funny meme.
         </p>
 
         <div className="member-home-actions">
@@ -46,8 +46,8 @@ export default async function MembersPage() {
         <ol className="member-steps" aria-label="How it works">
           <li>
             <span className="member-step-number">01</span>
-            <h2>Add an image</h2>
-            <p>Give the model a photo and any context it should know.</p>
+            <h2>Choose a format</h2>
+            <p>Start with a topic alone, or give the model a photo and context.</p>
           </li>
           <li>
             <span className="member-step-number">02</span>
