@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Is AI funny?",
-  description: "AI makes memes from images and context. You be the judge.",
+  title: "non-human memes — Is AI funny?",
+  description: "AI-generated captions and image memes. Is AI funny? You decide.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

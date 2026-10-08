@@ -20,8 +20,8 @@ export default async function MembersPage() {
     <main className="page-shell account-shell">
       <header className="site-header">
         <Link className="wordmark" href="/">
-          <span className="wordmark-icon" aria-hidden="true">m</span>
-          meme
+          <span className="wordmark-icon" aria-hidden="true">n</span>
+          non-human memes
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/">Feed</Link>
@@ -64,7 +64,7 @@ export default async function MembersPage() {
 
       <footer className="site-footer">
         <Link href="/">Back to feed</Link>
-        <span>Meme</span>
+        <span>non-human memes</span>
       </footer>
     </main>
   );

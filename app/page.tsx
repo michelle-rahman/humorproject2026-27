@@ -75,9 +75,9 @@ export default async function Home({
   return (
     <main className="page-shell">
       <header className="site-header">
-        <Link className="wordmark" href="#top" aria-label="Meme home">
-          <span className="wordmark-icon" aria-hidden="true">m</span>
-          meme
+        <Link className="wordmark" href="#top" aria-label="non-human memes home">
+          <span className="wordmark-icon" aria-hidden="true">n</span>
+          non-human memes
         </Link>
         <div className="home-header-right">
           {user ? (
@@ -173,7 +173,7 @@ export default async function Home({
 
       <footer className="site-footer">
         <span>Image / text</span>
-        <span>Meme</span>
+        <span>non-human memes</span>
       </footer>
     </main>
   );

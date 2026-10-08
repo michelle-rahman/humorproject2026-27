@@ -27,8 +27,8 @@ export default async function ProfilePage() {
     <main className="page-shell account-shell">
       <header className="site-header">
         <Link className="wordmark" href="/">
-          <span className="wordmark-icon" aria-hidden="true">m</span>
-          meme
+          <span className="wordmark-icon" aria-hidden="true">n</span>
+          non-human memes
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/inside">Members</Link>
@@ -68,7 +68,7 @@ export default async function ProfilePage() {
 
       <footer className="site-footer">
         <Link href="/">Back to feed</Link>
-        <span>Meme · Profile</span>
+        <span>non-human memes · Profile</span>
       </footer>
     </main>
   );
