@@ -33,5 +33,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/profile", requestUrl.origin));
   }
 
-  return NextResponse.redirect(new URL("/?welcome=1", requestUrl.origin));
+  return NextResponse.redirect(new URL("/inside", requestUrl.origin));
 }

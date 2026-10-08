@@ -25,15 +25,41 @@ export default async function MembersPage() {
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/">Feed</Link>
+          <Link href="/profile">Profile</Link>
           <SignOutButton />
         </nav>
       </header>
 
-      <section className="gated-card">
-        <p className="eyebrow">ACCOUNT</p>
-        <h1>{name ? `Hello, ${name}.` : "Hello."}</h1>
-        <p className="intro-copy">You’re signed in.</p>
-        <Link className="text-link" href="/profile">Edit profile</Link>
+      <section className="gated-card member-home" aria-labelledby="member-home-title">
+        <p className="eyebrow">THE MEME TEST</p>
+        <h1 id="member-home-title">Is AI funny?</h1>
+        <p className="member-greeting">Welcome back{name ? `, ${name}` : ""}.</p>
+        <p className="intro-copy">
+          Upload an image and add a topic or context. AI writes three captions; pick one to publish, then vote on other posts. The point is to find out whether AI can make a funny meme.
+        </p>
+
+        <div className="member-home-actions">
+          <Link className="button button-primary" href="/create">Make a meme</Link>
+          <Link className="button member-secondary-action" href="/#collection-heading">Judge the feed</Link>
+        </div>
+
+        <ol className="member-steps" aria-label="How it works">
+          <li>
+            <span className="member-step-number">01</span>
+            <h2>Add an image</h2>
+            <p>Give the model a photo and any context it should know.</p>
+          </li>
+          <li>
+            <span className="member-step-number">02</span>
+            <h2>Pick a caption</h2>
+            <p>Review three options and publish the one you want people to rate.</p>
+          </li>
+          <li>
+            <span className="member-step-number">03</span>
+            <h2>Judge the result</h2>
+            <p>Upvote or downvote memes in the feed. Your vote is the verdict.</p>
+          </li>
+        </ol>
       </section>
 
       <footer className="site-footer">
