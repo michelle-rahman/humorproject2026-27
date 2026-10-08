@@ -145,7 +145,12 @@ export async function POST(request: Request) {
       },
     });
 
-    const models = [...new Set([model, fallbackModel, "gemini-3.6-flash"])];
+    const models = [...new Set([
+      model,
+      fallbackModel,
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+    ])];
     const deadline = Date.now() + 55_000;
     let response: Response | undefined;
     let lastAttemptTimedOut = false;
