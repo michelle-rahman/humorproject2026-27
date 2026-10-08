@@ -27,8 +27,8 @@ export default async function ProfilePage() {
     <main className="page-shell account-shell">
       <header className="site-header">
         <Link className="wordmark" href="/">
-          <span className="wordmark-icon" aria-hidden="true">S</span>
-          side notes
+          <span className="wordmark-icon" aria-hidden="true">m</span>
+          meme
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/inside">Members</Link>
@@ -37,24 +37,24 @@ export default async function ProfilePage() {
       </header>
 
       <section className="account-intro">
-        <p className="eyebrow"><span className="status-dot" /> YOUR CORNER OF THE ARCHIVE</p>
-        <h1>Your <span>profile.</span></h1>
-        <p className="intro-copy">A little about the person behind the punchline.</p>
+        <p className="eyebrow">ACCOUNT</p>
+        <h1>Your profile.</h1>
+        <p className="intro-copy">Manage your name and photo.</p>
       </section>
 
       <section className="profile-panel" aria-labelledby="profile-heading">
         <div className="profile-panel-heading">
           <div>
             <p className="eyebrow">PROFILE DETAILS</p>
-            <h2 id="profile-heading">The essentials</h2>
+            <h2 id="profile-heading">Profile details</h2>
           </div>
           <span className="email-chip">{user.email}</span>
         </div>
 
         {profileNeedsNames && (
           <div className="profile-prompt" role="status">
-            <span aria-hidden="true">✳</span>
-            <p><strong>One small thing before you explore:</strong> add your first and last name to finish setting up your profile.</p>
+            <span aria-hidden="true">·</span>
+            <p>Add your first and last name to finish your profile.</p>
           </div>
         )}
 
@@ -67,8 +67,8 @@ export default async function ProfilePage() {
       </section>
 
       <footer className="site-footer">
-        <Link href="/">← Back to the collection</Link>
-        <span>Side Notes · Profile</span>
+        <Link href="/">Back to feed</Link>
+        <span>Meme · Profile</span>
       </footer>
     </main>
   );

@@ -1,110 +1,114 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const STYLE_LABELS: Record<string, string> = {
-  observational: "sharp, relatable observation",
-  absurdist: "playful absurdity",
-  wholesome: "warm and gently funny",
-  campus_lore: "Columbia campus life and the perspective of a newcomer to New York City",
-};
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+type CaptionOption = { top: string; bottom: string };
 
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "Sign in before generating a caption." }, { status: 401 });
+    return NextResponse.json({ error: "Sign in to make a meme." }, { status: 401 });
   }
 
-  let body: { sourceText?: unknown; humorStyle?: unknown };
+  let body: { imagePath?: unknown; context?: unknown };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Send a short scene to caption." }, { status: 400 });
+    return NextResponse.json({ error: "Choose an image first." }, { status: 400 });
   }
 
-  const sourceText = typeof body.sourceText === "string" ? body.sourceText.trim() : "";
-  const humorStyle = typeof body.humorStyle === "string" ? body.humorStyle : "";
-  if (sourceText.length < 8 || sourceText.length > 500) {
-    return NextResponse.json({ error: "Describe a scene in 8 to 500 characters." }, { status: 400 });
+  const imagePath = typeof body.imagePath === "string" ? body.imagePath : "";
+  const context = typeof body.context === "string" ? body.context.trim() : "";
+  if (!imagePath.startsWith(`${user.id}/`) || imagePath.includes("..")) {
+    return NextResponse.json({ error: "That image could not be accessed." }, { status: 400 });
   }
-  if (!(humorStyle in STYLE_LABELS)) {
-    return NextResponse.json({ error: "Choose one of the available humor styles." }, { status: 400 });
+  if (context.length > 500) {
+    return NextResponse.json({ error: "Keep context under 500 characters." }, { status: 400 });
   }
+
+  const { data: image, error: imageError } = await supabase.storage
+    .from("meme-images")
+    .download(imagePath);
+  if (imageError || !image) {
+    return NextResponse.json({ error: "Could not load that image. Try uploading it again." }, { status: 400 });
+  }
+  if (!IMAGE_TYPES.has(image.type) || image.size > MAX_IMAGE_BYTES) {
+    return NextResponse.json({ error: "Use a JPG, PNG, or WebP image under 5 MB." }, { status: 400 });
+  }
+
+  const promptText = [
+    "Look closely at the attached image and write three distinct meme captions about what is actually visible.",
+    "Return only valid JSON in this shape: {\"captions\":[{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"}]}.",
+    "Each option has a short top line and a short bottom line. Keep the language natural, specific, dry, and concise.",
+    "Give each option a different joke or observation. Avoid familiar meme templates, catchphrases, generic campus or city jokes, emojis, hashtags, and forced slang.",
+    "Do not guess a person's identity, private traits, or feelings. Do not make the person the target of the joke.",
+    `Additional context from the uploader: ${context || "None."}`,
+  ].join("\n");
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "Caption generation is not configured yet." }, { status: 503 });
   }
 
-  const promptText = [
-    "Write one original, funny caption for a student-life humor feed.",
-    `Humor direction: ${STYLE_LABELS[humorStyle]}.`,
-    "Keep it under 25 words, specific, and easy to understand without extra context.",
-    "Punch up at situations, not at protected traits or a real person's appearance.",
-    "Return only the caption, with no quotation marks, explanation, or list.",
-    `Scene from the user: ${sourceText}`,
-  ].join("\n");
-
-  let generatedCaption: string;
   try {
+    const base64Image = Buffer.from(await image.arrayBuffer()).toString("base64");
     const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: promptText }] }],
-          generationConfig: { temperature: 0.9, maxOutputTokens: 100 },
+          contents: [{
+            role: "user",
+            parts: [
+              { inline_data: { mime_type: image.type, data: base64Image } },
+              { text: promptText },
+            ],
+          }],
+          generationConfig: {
+            temperature: 1,
+            maxOutputTokens: 500,
+            responseMimeType: "application/json",
+          },
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(25_000),
+        signal: AbortSignal.timeout(30_000),
       },
     );
 
     if (!response.ok) {
       console.error("Gemini generation failed with status", response.status);
-      return NextResponse.json(
-        { error: "The caption generator is unavailable right now. Please try again shortly." },
-        { status: 502 },
-      );
+      return NextResponse.json({ error: "Could not generate captions. Try again shortly." }, { status: 502 });
     }
 
     const result = await response.json();
-    generatedCaption = result.candidates?.[0]?.content?.parts
+    const rawText = result.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text ?? "")
-      .join(" ")
+      .join("")
       .trim();
-    if (!generatedCaption) {
-      return NextResponse.json({ error: "The model returned an empty caption. Try another scene." }, { status: 502 });
+    if (!rawText) {
+      return NextResponse.json({ error: "No captions came back. Try another image." }, { status: 502 });
     }
-    generatedCaption = generatedCaption.replace(/^['"“”]+|['"“”]+$/g, "").slice(0, 500);
+
+    const parsed = JSON.parse(rawText) as { captions?: CaptionOption[] };
+    const captions = Array.isArray(parsed.captions)
+      ? parsed.captions.slice(0, 3).map((caption) => ({
+          top: typeof caption.top === "string" ? caption.top.trim().slice(0, 160) : "",
+          bottom: typeof caption.bottom === "string" ? caption.bottom.trim().slice(0, 160) : "",
+        })).filter((caption) => caption.top && caption.bottom)
+      : [];
+
+    if (captions.length !== 3) {
+      return NextResponse.json({ error: "The captions came back in an unexpected format. Try again." }, { status: 502 });
+    }
+
+    return NextResponse.json({ captions, imagePath, context, promptText });
   } catch (error) {
     console.error("Gemini request could not be completed", error instanceof Error ? error.name : "UnknownError");
-    return NextResponse.json(
-      { error: "Could not reach the caption generator. Please try again." },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "Could not reach the caption generator. Try again." }, { status: 502 });
   }
-
-  const { data: savedRows, error: insertError } = await supabase.rpc("publish_caption_generation", {
-    p_source_text: sourceText,
-    p_humor_style: humorStyle,
-    p_prompt_text: promptText,
-    p_caption_text: generatedCaption,
-  });
-  const generation = Array.isArray(savedRows) ? savedRows[0] : savedRows;
-
-  if (insertError || !generation) {
-    console.error("Could not save caption generation", insertError?.code ?? "unknown");
-    return NextResponse.json(
-      { error: "The caption was generated but could not be saved. Check the Supabase assignment 4 SQL." },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ generation }, { status: 201 });
 }

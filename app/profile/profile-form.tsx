@@ -121,7 +121,7 @@ export default function ProfileForm({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={photoPreview ?? avatarUrl ?? ""} alt="Your profile" />
           ) : (
-            <span aria-hidden="true">{firstName.trim().charAt(0) || "✳"}</span>
+            <span aria-hidden="true">{firstName.trim().charAt(0) || "·"}</span>
           )}
         </div>
         <label className="upload-control">

@@ -6,6 +6,7 @@
 create table if not exists public.caption_generations (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
+  image_path text,
   humor_style text not null check (humor_style in ('observational', 'absurdist', 'wholesome', 'campus_lore')),
   caption_text text not null check (char_length(caption_text) between 1 and 500),
   upvotes integer not null default 0 check (upvotes >= 0),
@@ -30,6 +31,17 @@ create table if not exists public.caption_votes (
   unique (generation_id, user_id)
 );
 
+alter table public.caption_generation_details
+  alter column source_text drop not null;
+alter table public.caption_generation_details
+  drop constraint if exists caption_generation_details_source_text_check;
+alter table public.caption_generation_details
+  add constraint caption_generation_details_source_text_check
+  check (source_text is null or char_length(source_text) <= 500);
+
+alter table public.caption_generations
+  add column if not exists image_path text;
+
 -- Turn RLS on and clear old policies on all app tables in public. This is
 -- important because PostgreSQL combines permissive policies with OR semantics.
 do $$
@@ -53,11 +65,45 @@ begin
 end;
 $$;
 
+-- Meme images are private Storage objects. Signed-in users can view them;
+-- users can upload and delete only files in their own folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'meme-images', 'meme-images', false, 5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Signed-in users can view meme images" on storage.objects;
+create policy "Signed-in users can view meme images"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'meme-images');
+
+drop policy if exists "Users can upload their own meme images" on storage.objects;
+create policy "Users can upload their own meme images"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'meme-images'
+    and (storage.foldername(name))[1] = (select auth.uid()::text)
+  );
+
+drop policy if exists "Users can delete their own meme images" on storage.objects;
+create policy "Users can delete their own meme images"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'meme-images'
+    and (storage.foldername(name))[1] = (select auth.uid()::text)
+  );
+
 -- The old sample archive remains public and read-only. The app feed uses the
 -- new caption_generations table below.
-grant select on public.caption_entries to anon, authenticated;
-create policy "Public can read the caption archive"
-  on public.caption_entries for select to anon, authenticated
+revoke all on public.caption_entries from anon;
+grant select on public.caption_entries to authenticated;
+create policy "Signed-in users can read the caption archive"
+  on public.caption_entries for select to authenticated
   using (true);
 
 -- Each user can only read or edit their own profile.
@@ -75,9 +121,9 @@ create policy "Users can update their own profile"
 
 -- Signed-in users can read published captions and aggregate counts. The owner
 -- ID is deliberately not selectable; source text and prompts stay private.
-revoke select (id, humor_style, caption_text, upvotes, downvotes, created_at)
+revoke select (id, image_path, humor_style, caption_text, upvotes, downvotes, created_at)
   on public.caption_generations from anon;
-grant select (id, humor_style, caption_text, upvotes, downvotes, created_at)
+grant select (id, image_path, humor_style, caption_text, upvotes, downvotes, created_at)
   on public.caption_generations to authenticated;
 create policy "Signed-in users can read generated captions"
   on public.caption_generations for select to authenticated
@@ -115,16 +161,20 @@ create index if not exists caption_votes_generation_id_idx
 
 -- The Gemini server route calls this function so generation and its private
 -- source/prompt details are inserted together in one transaction.
+drop function if exists public.publish_caption_generation(text, text, text, text);
+
 create or replace function public.publish_caption_generation(
   p_source_text text,
   p_humor_style text,
   p_prompt_text text,
-  p_caption_text text
+  p_caption_text text,
+  p_image_path text
 )
 returns table (
   id uuid,
   caption_text text,
   humor_style text,
+  image_path text,
   upvotes integer,
   downvotes integer,
   created_at timestamptz
@@ -140,8 +190,8 @@ begin
   if current_user_id is null then
     raise exception 'Authentication required' using errcode = '42501';
   end if;
-  if p_source_text is null or char_length(trim(p_source_text)) not between 8 and 500 then
-    raise exception 'Scene must be between 8 and 500 characters' using errcode = '22023';
+  if p_source_text is not null and char_length(trim(p_source_text)) > 500 then
+    raise exception 'Context must be 500 characters or fewer' using errcode = '22023';
   end if;
   if p_humor_style not in ('observational', 'absurdist', 'wholesome', 'campus_lore') then
     raise exception 'Unsupported humor style' using errcode = '22023';
@@ -152,23 +202,29 @@ begin
   if p_caption_text is null or char_length(trim(p_caption_text)) not between 1 and 500 then
     raise exception 'Invalid caption' using errcode = '22023';
   end if;
+  if p_image_path is null
+     or left(p_image_path, char_length(current_user_id::text) + 1)
+       <> (current_user_id::text || '/') then
+    raise exception 'Image must belong to the signed-in user' using errcode = '42501';
+  end if;
 
-  insert into public.caption_generations (user_id, humor_style, caption_text)
-  values (current_user_id, p_humor_style, trim(p_caption_text))
+  insert into public.caption_generations (user_id, image_path, humor_style, caption_text)
+  values (current_user_id, p_image_path, p_humor_style, trim(p_caption_text))
   returning caption_generations.id into new_generation_id;
 
   insert into public.caption_generation_details (generation_id, user_id, source_text, prompt_text)
-  values (new_generation_id, current_user_id, trim(p_source_text), p_prompt_text);
+  values (new_generation_id, current_user_id, nullif(trim(p_source_text), ''), p_prompt_text);
 
   return query
-  select g.id, g.caption_text, g.humor_style, g.upvotes, g.downvotes, g.created_at
+  select g.id, g.caption_text, g.humor_style, g.image_path,
+         g.upvotes, g.downvotes, g.created_at
   from public.caption_generations as g
   where g.id = new_generation_id;
 end;
 $$;
 
-revoke all on function public.publish_caption_generation(text, text, text, text) from public, anon;
-grant execute on function public.publish_caption_generation(text, text, text, text) to authenticated;
+revoke all on function public.publish_caption_generation(text, text, text, text, text) from public, anon;
+grant execute on function public.publish_caption_generation(text, text, text, text, text) to authenticated;
 
 -- Update public totals from the private vote table. The SECURITY DEFINER trigger
 -- is the only path that changes the aggregate columns.

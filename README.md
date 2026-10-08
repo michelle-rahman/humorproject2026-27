@@ -1,78 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Meme
 
-## Getting Started
+Upload an image, get three AI caption options, publish one, and vote on posts. The feed and uploaded images are available to signed-in users.
 
-First, run the development server:
+## Local setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Assignment 3: Google sign-in and profiles
-
-### Supabase setup
-
-1. In Supabase, open **SQL Editor** and run [`supabase/assignment-3.sql`](supabase/assignment-3.sql). It creates a `profiles` row when a new Auth user is added and a public `avatars` Storage bucket with per-user upload policies.
-2. In **Authentication → Providers → Google**, enable Google and enter your Google OAuth client ID and secret.
-3. In **Authentication → URL Configuration**, set the Site URL to your app's base URL. Add these app callback URLs to Redirect URLs:
-   - `http://localhost:3000/auth/callback`
-   - `https://YOUR-VERCEL-DOMAIN/auth/callback`
-
-### Google OAuth setup
-
-Create a Google OAuth client with application type **Web application**. For Authorized JavaScript origins, add `http://localhost:3000` and your Vercel site's base URL. For Authorized redirect URIs, use the Supabase provider callback shown in Supabase's Google provider setup, normally `https://YOUR-PROJECT-REF.supabase.co/auth/v1/callback`.
-
-The app's `redirectTo` is exactly `/auth/callback`. Supabase sends the user back to that app route with its OAuth code, and the route exchanges the code for a session before forwarding the user to `/profile`.
-
-### Environment variables
-
-Set these in `.env.local` for local development and in Vercel for Production, Preview, and Development:
+Create `.env.local` with:
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-or-publishable-key
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
-Never add a Supabase `service_role` key or Google client secret to these app variables.
+Keep Gemini and Supabase secret keys server-side. Do not prefix them with `NEXT_PUBLIC_`.
 
-### App routes
+## Supabase and Google sign-in
 
-- `/` is the Google sign-in entry point and the caption feed for signed-in users.
-- `/profile` lets a signed-in user update their first and last name and upload an avatar.
-- `/inside` is protected and redirects signed-out visitors to the home page.
+1. Run [`supabase/assignment-3.sql`](supabase/assignment-3.sql) in Supabase SQL Editor.
+2. Enable Google under **Authentication → Providers → Google** and provide your Google OAuth client ID and secret.
+3. In **Authentication → URL Configuration**, set the Site URL to the deployed app URL. Add `http://localhost:3000/auth/callback` and the deployed app's `/auth/callback` URL to Redirect URLs.
+4. In Google Cloud, use the Supabase provider callback URL as the OAuth client's authorized redirect URI.
 
-## Assignment 4: Generate and rate captions
+## Assignment 4: image memes
 
-1. Run [`supabase/assignment-4.sql`](supabase/assignment-4.sql) in Supabase SQL Editor after the Assignment 3 SQL. It enables RLS on every existing `public` table and creates the signed-in-only caption feed, private prompt details, vote records, vote-count trigger, and generation RPC.
-2. Create a Gemini API key in Google AI Studio. This key is different from the Google OAuth client secret used for login.
-3. Add `GEMINI_API_KEY` in Vercel as a server-only variable for Production, Preview, and Development. Add it to `.env.local` for local use. Do not prefix it with `NEXT_PUBLIC_`. You can optionally set `GEMINI_MODEL`; the default is `gemini-3.8-flash`.
-4. Redeploy, sign in with Google, and open `/create`. Enter a campus or New York moment, generate a caption, and publish it to the feed. Signed-in users can then upvote or downvote each caption; their individual votes are private and the public counts are updated by a database trigger.
+1. Run [`supabase/assignment-4.sql`](supabase/assignment-4.sql) after Assignment 3. It creates the private `meme-images` Storage bucket, enables RLS, and sets up generation and vote tables and functions.
+2. Set `GEMINI_API_KEY` in Vercel for each environment and redeploy.
+3. Sign in, open `/create`, upload a JPG, PNG, or WebP image under 5 MB, optionally add context, choose one of three captions, and publish it.
 
-The prompt-to-caption feature is designed for quick, daily contributions about campus life and getting to know New York City. Each generation saves its source scene and exact prompt in `caption_generation_details`, which is visible only to its creator. Public caption rows show the generated text and aggregate vote totals.
+Images are stored in private Supabase Storage. The database stores each image path, selected caption, optional context, and exact generation prompt. Votes are private per user; totals are updated by a database trigger.
+
+## Routes
+
+- `/` — sign-in page and members-only meme feed
+- `/create` — upload an image and publish a caption
+- `/profile` — update profile details and avatar
+- `/inside` — protected account page

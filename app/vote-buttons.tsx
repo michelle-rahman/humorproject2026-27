@@ -83,7 +83,7 @@ export default function VoteButtons({
 
   return (
     <div className="vote-area">
-      <div className="vote-controls" aria-label="Rate this caption">
+      <div className="vote-controls" aria-label="Rate this meme">
         <button
           aria-pressed={currentVote === 1}
           className={`vote-button ${currentVote === 1 ? "is-selected" : ""}`}

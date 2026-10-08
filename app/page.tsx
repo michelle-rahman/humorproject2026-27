@@ -6,18 +6,12 @@ import VoteButtons from "@/app/vote-buttons";
 
 type CaptionGeneration = {
   id: string;
+  image_path: string | null;
   caption_text: string;
   humor_style: string;
   upvotes: number;
   downvotes: number;
   created_at: string;
-};
-
-const STYLE_LABELS: Record<string, string> = {
-  campus_lore: "Campus & city lore",
-  observational: "Sharp observation",
-  absurdist: "Playful absurdity",
-  wholesome: "Warm and wholesome",
 };
 
 function formatDate(value: string) {
@@ -56,7 +50,8 @@ export default async function Home({
 
       const { data, error } = await supabase
         .from("caption_generations")
-        .select("id,caption_text,humor_style,upvotes,downvotes,created_at")
+        .select("id,image_path,caption_text,humor_style,upvotes,downvotes,created_at")
+        .not("image_path", "is", null)
         .order("created_at", { ascending: false })
         .limit(30);
 
@@ -80,14 +75,14 @@ export default async function Home({
   return (
     <main className="page-shell">
       <header className="site-header">
-        <Link className="wordmark" href="#top" aria-label="Side Notes home">
-          <span className="wordmark-icon" aria-hidden="true">S</span>
-          side notes
+        <Link className="wordmark" href="#top" aria-label="Meme home">
+          <span className="wordmark-icon" aria-hidden="true">m</span>
+          meme
         </Link>
         <div className="home-header-right">
           {user ? (
             <nav className="account-nav" aria-label="Account navigation">
-              <Link href="/inside">Members</Link>
+              <Link href="/create">New meme</Link>
               <Link href="/profile">Profile</Link>
               <SignOutButton />
             </nav>
@@ -96,21 +91,14 @@ export default async function Home({
       </header>
 
       <section className="intro" id="top">
-        <p className="eyebrow"><span className="status-dot" /> THE CAPTION COLLECTION</p>
-        <h1>Little observations.<br /><span>Big campus energy.</span></h1>
+        <p className="eyebrow">MEME FEED</p>
+        <h1>Memes.</h1>
         {user && showWelcome && (
           <p className="welcome-message" role="status">
-            Welcome back{firstName ? `, ${firstName}` : ""}! Your caption collection is ready.
+            Welcome back{firstName ? `, ${firstName}` : ""}.
           </p>
         )}
-        <p className="intro-copy">
-          Side Notes turns campus and city moments into captions, then lets the
-          community decide what lands. New York is weird enough already.
-        </p>
-        {user && <div className="collection-count">
-          <span className="count-number">{generations.length.toString().padStart(2, "0")}</span>
-          <span className="count-label">community captions</span>
-        </div>}
+        <p className="intro-copy">Create from an image. Vote on the captions.</p>
       </section>
 
       <section className="collection" aria-labelledby="collection-heading">
@@ -118,12 +106,8 @@ export default async function Home({
           <>
             <div className="section-heading">
               <div>
-                <p className="eyebrow">MADE HERE, RATED HERE</p>
-                <h2 id="collection-heading">The latest notes</h2>
-              </div>
-              <div className="feed-actions">
-                <span className="live-label"><span className="status-dot" /> LIVE FEED</span>
-                <Link className="button button-primary create-cta" href="/create">Make a caption <span aria-hidden="true">↗</span></Link>
+                <p className="eyebrow">FEED</p>
+                <h2 id="collection-heading">Recent</h2>
               </div>
             </div>
 
@@ -131,31 +115,36 @@ export default async function Home({
               <div className="message-card" role="status">
                 <span className="message-icon" aria-hidden="true">!</span>
                 <div>
-                  <h3>We couldn’t load the captions.</h3>
+                  <h3>Could not load the feed.</h3>
                   <p>{feedError}</p>
                 </div>
               </div>
             ) : generations.length === 0 ? (
               <div className="message-card empty-feed">
-                <span className="message-icon" aria-hidden="true">✳</span>
                 <div>
-                  <h3>The feed is waiting for its first caption.</h3>
-                  <p>Make the first note from a small campus or city moment.</p>
-                  <Link className="text-link" href="/create">Open the prompt studio →</Link>
+                  <h3>No memes yet.</h3>
+                  <Link className="text-link" href="/create">Create a meme</Link>
                 </div>
               </div>
             ) : (
               <div className="caption-grid">
-                {generations.map((generation, index) => (
+                {generations.map((generation) => (
                   <article className="caption-card" key={generation.id}>
-                    <div className="card-topline">
-                      <span className="card-index">NOTE {String(index + 1).padStart(2, "0")}</span>
-                      <span className="status-tag status-published">AI GENERATED</span>
-                    </div>
-                    <p className="caption-text">“{generation.caption_text}”</p>
-                    <div className="tag-row">
-                      <span className="flavor-tag">{STYLE_LABELS[generation.humor_style] ?? generation.humor_style}</span>
-                      <span className="prompt-label">Side Notes caption engine</span>
+                    <div className="meme-image-wrap">
+                      {generation.image_path && (
+                        <img
+                          className="meme-image"
+                          src={`/api/meme-image?path=${encodeURIComponent(generation.image_path)}`}
+                          alt="User-submitted meme image"
+                        />
+                      )}
+                      <div className="meme-overlay" aria-label={generation.caption_text.replace("\n", ". ")}>
+                        {generation.caption_text.split("\n").map((line, lineIndex) => (
+                          <span className={lineIndex === 0 ? "meme-top-text" : "meme-bottom-text"} key={`${generation.id}-${lineIndex}`}>
+                            {line}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                     <footer className="card-footer">
                       <span>{formatDate(generation.created_at)}</span>
@@ -175,17 +164,17 @@ export default async function Home({
           </>
         ) : (
           <div className="member-gate">
-            <p className="eyebrow">MEMBERS ONLY</p>
-            <h2 id="collection-heading">Captions are available to signed-in users.</h2>
-            <p>Sign in with Google to explore the caption feed, create captions, and vote on them.</p>
+            <p className="eyebrow">MEMBERS</p>
+            <h2 id="collection-heading">Sign in to view memes.</h2>
+            <p>The feed is only available to signed-in users.</p>
             <GoogleSignInButton />
           </div>
         )}
       </section>
 
       <footer className="site-footer">
-        <span>Made for the moments between classes.</span>
-        <span>One caption at a time <span aria-hidden="true">✳</span></span>
+        <span>Image / text</span>
+        <span>Meme</span>
       </footer>
     </main>
   );

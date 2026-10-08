@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Side Notes — A Tiny Humor Archive",
-  description: "A growing collection of AI-generated captions inspired by student life.",
+  title: "Meme — Image to caption",
+  description: "Make a meme from an image and a line of text.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

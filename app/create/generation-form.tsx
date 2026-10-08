@@ -1,98 +1,216 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-type GeneratedCaption = {
-  id: string;
-  caption_text: string;
-  humor_style: string;
-  upvotes: number;
-  downvotes: number;
+type CaptionOption = { top: string; bottom: string };
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
 };
 
-const HUMOR_STYLES = [
-  { value: "campus_lore", label: "Campus & city lore" },
-  { value: "observational", label: "Sharp observation" },
-  { value: "absurdist", label: "Playful absurdity" },
-  { value: "wholesome", label: "Warm and wholesome" },
-];
-
 export default function GenerationForm() {
-  const [sourceText, setSourceText] = useState("");
-  const [humorStyle, setHumorStyle] = useState(HUMOR_STYLES[0].value);
-  const [generation, setGeneration] = useState<GeneratedCaption | null>(null);
+  const router = useRouter();
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [imagePath, setImagePath] = useState<string | null>(null);
+  const [context, setContext] = useState("");
+  const [captions, setCaptions] = useState<CaptionOption[]>([]);
+  const [promptText, setPromptText] = useState("");
+  const [selectedCaption, setSelectedCaption] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [published, setPublished] = useState(false);
+
+  useEffect(() => {
+    if (!preview) return;
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setError(null);
+    setCaptions([]);
+    setImagePath(null);
+    setPublished(false);
+    setPhoto(null);
+    setPreview(null);
+
+    if (!file) {
+      setPhoto(null);
+      setPreview(null);
+      return;
+    }
+    if (!IMAGE_EXTENSIONS[file.type]) {
+      setError("Choose a JPG, PNG, or WebP image.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("Images must be under 5 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setPhoto(file);
+    setPreview(URL.createObjectURL(file));
+  }
+
+  async function uploadPhoto() {
+    if (imagePath) return imagePath;
+    if (!photo) throw new Error("Choose an image first.");
+
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Sign in to make a meme.");
+
+    const path = `${user.id}/${crypto.randomUUID()}.${IMAGE_EXTENSIONS[photo.type]}`;
+    const { error: uploadError } = await supabase.storage
+      .from("meme-images")
+      .upload(path, photo, { contentType: photo.type, upsert: false });
+    if (uploadError) throw new Error("Image upload failed. Check the Assignment 4 Storage policies.");
+
+    setImagePath(path);
+    return path;
+  }
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setGeneration(null);
-    setLoading(true);
+    setCaptions([]);
+    setPublished(false);
+    setWorking(true);
 
     try {
+      const path = await uploadPhoto();
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceText, humorStyle }),
+        body: JSON.stringify({ imagePath: path, context }),
       });
       const result = await response.json();
-      if (!response.ok) {
-        setError(result.error ?? "Could not generate a caption.");
-      } else {
-        setGeneration(result.generation as GeneratedCaption);
-        setSourceText("");
-      }
-    } catch {
-      setError("Could not reach the caption engine. Check your connection and try again.");
+      if (!response.ok) throw new Error(result.error ?? "Could not generate captions.");
+
+      setCaptions(result.captions as CaptionOption[]);
+      setPromptText(result.promptText as string);
+      setSelectedCaption(0);
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Could not generate captions.");
     } finally {
-      setLoading(false);
+      setWorking(false);
+    }
+  }
+
+  async function publish() {
+    const caption = captions[selectedCaption];
+    if (!caption || !imagePath) return;
+    setError(null);
+    setWorking(true);
+
+    try {
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imagePath, context, promptText, ...caption }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not publish this meme.");
+      setPublished(true);
+      router.refresh();
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Could not publish this meme.");
+    } finally {
+      setWorking(false);
     }
   }
 
   return (
-    <div className="generator-content">
+    <div className="meme-maker">
       <form className="generator-form" onSubmit={generate}>
-        <label className="form-field" htmlFor="scene-input">
-          <span>Your scene</span>
-          <textarea
-            id="scene-input"
-            maxLength={500}
-            minLength={8}
-            onChange={(event) => setSourceText(event.target.value)}
-            placeholder="A Midwesterner on the subway trying to tell whether the person next to them is singing or just talking loudly on AirPods…"
+        <label className="form-field" htmlFor="meme-image">
+          <span>Image</span>
+          <input
+            id="meme-image"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={choosePhoto}
             required
-            rows={5}
-            value={sourceText}
+            type="file"
           />
-          <span className="character-count">{sourceText.length}/500 · Leave out real names and private details.</span>
+          <span className="character-count">JPG, PNG, or WebP · up to 5 MB</span>
         </label>
 
-        <label className="form-field" htmlFor="humor-style">
-          <span>Humor direction</span>
-          <select id="humor-style" onChange={(event) => setHumorStyle(event.target.value)} value={humorStyle}>
-            {HUMOR_STYLES.map((style) => <option key={style.value} value={style.value}>{style.label}</option>)}
-          </select>
+        {preview && (
+          <div className="image-preview-wrap">
+            <img className="image-preview" src={preview} alt="Selected upload preview" />
+          </div>
+        )}
+
+        <label className="form-field" htmlFor="image-context">
+          <span>Context <span className="optional-label">Optional</span></span>
+          <textarea
+            id="image-context"
+            maxLength={500}
+            onChange={(event) => {
+              setContext(event.target.value);
+              setCaptions([]);
+              setPromptText("");
+              setPublished(false);
+            }}
+            placeholder="What should the model know?"
+            rows={2}
+            value={context}
+          />
         </label>
 
         {error && <p className="form-message form-error" role="alert">{error}</p>}
 
-        <button className="button button-primary generate-button" disabled={loading || sourceText.trim().length < 8} type="submit">
-          {loading ? <><span className="loading-dot" /> Finding the funny…</> : "Generate my caption"}
+        <button className="button button-primary generate-button" disabled={working || !photo} type="submit">
+          {working && captions.length === 0 ? "Generating…" : "Generate captions"}
         </button>
-        <p className="prompt-note">Your scene and the exact prompt are saved with the caption so the experiment stays traceable.</p>
       </form>
 
-      {generation && (
-        <section className="generated-result" aria-live="polite">
-          <p className="eyebrow"><span className="status-dot" /> YOUR CAPTION IS IN THE FEED</p>
-          <blockquote>“{generation.caption_text}”</blockquote>
-          <div className="result-footer">
-            <span className="flavor-tag">{HUMOR_STYLES.find((style) => style.value === generation.humor_style)?.label ?? generation.humor_style}</span>
-            <Link className="text-link" href="/">See the caption in the feed →</Link>
+      {captions.length > 0 && !published && (
+        <section className="caption-options" aria-live="polite">
+          <div className="options-heading">
+            <h3>Choose one</h3>
+            <button className="text-button" disabled={working} onClick={(event) => {
+              event.preventDefault();
+              const form = event.currentTarget.closest(".meme-maker")?.querySelector("form");
+              form?.requestSubmit();
+            }} type="button">Try again</button>
           </div>
+          <div className="caption-option-list">
+            {captions.map((caption, index) => (
+              <button
+                aria-pressed={selectedCaption === index}
+                className={`caption-option${selectedCaption === index ? " is-selected" : ""}`}
+                key={`${caption.top}-${caption.bottom}`}
+                onClick={() => setSelectedCaption(index)}
+                type="button"
+              >
+                <span className="sr-only">Option {index + 1}. Top text:</span>
+                <span className="meme-top-text">{caption.top}</span>
+                <span className="sr-only">Bottom text:</span>
+                <span className="meme-bottom-text">{caption.bottom}</span>
+              </button>
+            ))}
+          </div>
+          <button className="button button-primary generate-button" disabled={working} onClick={publish} type="button">
+            {working ? "Publishing…" : "Publish"}
+          </button>
         </section>
+      )}
+
+      {published && (
+        <div className="published-note" role="status">
+          <span>Published.</span>
+          <Link className="text-link" href="/">View feed</Link>
+        </div>
       )}
     </div>
   );

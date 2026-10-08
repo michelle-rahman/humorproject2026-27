@@ -13,8 +13,8 @@ export default async function CreatePage() {
     <main className="page-shell account-shell">
       <header className="site-header">
         <Link className="wordmark" href="/">
-          <span className="wordmark-icon" aria-hidden="true">S</span>
-          side notes
+          <span className="wordmark-icon" aria-hidden="true">m</span>
+          meme
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
           <Link href="/profile">Profile</Link>
@@ -23,25 +23,24 @@ export default async function CreatePage() {
       </header>
 
       <section className="account-intro">
-        <p className="eyebrow"><span className="status-dot" /> MAKE A NEW NOTE</p>
-        <h1>Turn a moment <span>into a caption.</span></h1>
-        <p className="intro-copy">A weird subway moment, a dorm-room ritual, a very long line for coffee. Give the caption engine a scene; the community will decide if it lands.</p>
+        <p className="eyebrow">IMAGE TO MEME</p>
+        <h1>Make a meme.</h1>
+        <p className="intro-copy">Choose an image. Get three captions. Post one.</p>
       </section>
 
       <section className="generator-panel" aria-labelledby="generator-heading">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">THE PROMPT STUDIO</p>
-            <h2 id="generator-heading">What happened?</h2>
+            <p className="eyebrow">NEW POST</p>
+            <h2 id="generator-heading">Start with an image.</h2>
           </div>
-          <span className="live-label">GEMINI · CAPTION ENGINE</span>
         </div>
         <GenerationForm />
       </section>
 
       <footer className="site-footer">
         <Link href="/">← Back to the feed</Link>
-        <span>Side Notes · Create</span>
+        <span>Meme</span>
       </footer>
     </main>
   );
