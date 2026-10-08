@@ -148,30 +148,46 @@ export async function POST(request: Request) {
     const models = [...new Set([model, fallbackModel])];
     const deadline = Date.now() + 55_000;
     let response: Response | undefined;
+    let lastAttemptTimedOut = false;
     for (const [index, modelName] of models.entries()) {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) break;
 
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: makeRequestBody(modelName),
-          cache: "no-store",
-          signal: AbortSignal.timeout(Math.min(remainingMs, 30_000)),
-        },
-      );
+      lastAttemptTimedOut = false;
+      try {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: makeRequestBody(modelName),
+            cache: "no-store",
+            signal: AbortSignal.timeout(Math.min(remainingMs, 25_000)),
+          },
+        );
+      } catch (error) {
+        if (!(error instanceof Error) || error.name !== "TimeoutError") throw error;
+        lastAttemptTimedOut = true;
+        response = undefined;
+        console.warn("Gemini model timed out; trying fallback", modelName);
+        if (index === models.length - 1) break;
+        continue;
+      }
 
       if (response.status !== 503 || index === models.length - 1) break;
       console.warn("Gemini model unavailable; trying fallback", modelName);
       await response.body?.cancel();
+      response = undefined;
     }
 
     if (!response) {
       return NextResponse.json(
-        { error: "Gemini could not start caption generation. Please try again." },
-        { status: 503 },
+        {
+          error: lastAttemptTimedOut
+            ? "Gemini took too long to respond. Please try again shortly."
+            : "Gemini could not start caption generation. Please try again.",
+        },
+        { status: lastAttemptTimedOut ? 504 : 503 },
       );
     }
 
