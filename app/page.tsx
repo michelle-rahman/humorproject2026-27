@@ -82,7 +82,6 @@ export default async function Home({
         <div className="home-header-right">
           {user ? (
             <nav className="account-nav" aria-label="Account navigation">
-              <Link href="/create">New meme</Link>
               <Link href="/profile">Profile</Link>
               <SignOutButton />
             </nav>
@@ -91,14 +90,17 @@ export default async function Home({
       </header>
 
       <section className="intro" id="top">
-        <p className="eyebrow">MEME FEED</p>
-        <h1>Memes.</h1>
+        <p className="eyebrow">UPLOAD · CAPTION · VOTE</p>
+        <h1>Make a meme<br />from an image.</h1>
         {user && showWelcome && (
           <p className="welcome-message" role="status">
             Welcome back{firstName ? `, ${firstName}` : ""}.
           </p>
         )}
-        <p className="intro-copy">Create from an image. Vote on the captions.</p>
+        <p className="intro-copy">Upload a photo, choose an AI caption, and vote on other posts.</p>
+        {user && (
+          <Link className="button button-primary hero-cta" href="/create">Create a meme</Link>
+        )}
       </section>
 
       <section className="collection" aria-labelledby="collection-heading">
@@ -107,7 +109,8 @@ export default async function Home({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">FEED</p>
-                <h2 id="collection-heading">Recent</h2>
+                <h2 id="collection-heading">Meme feed</h2>
+                <p className="feed-description">Images paired with AI-written captions.</p>
               </div>
             </div>
 

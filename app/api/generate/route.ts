@@ -72,7 +72,28 @@ export async function POST(request: Request) {
           generationConfig: {
             temperature: 1,
             maxOutputTokens: 500,
-            responseMimeType: "application/json",
+            responseFormat: {
+              text: {
+                mimeType: "application/json",
+                schema: {
+                  type: "object",
+                  properties: {
+                    captions: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          top: { type: "string" },
+                          bottom: { type: "string" },
+                        },
+                        required: ["top", "bottom"],
+                      },
+                    },
+                  },
+                  required: ["captions"],
+                },
+              },
+            },
           },
         }),
         cache: "no-store",
@@ -81,8 +102,24 @@ export async function POST(request: Request) {
     );
 
     if (!response.ok) {
-      console.error("Gemini generation failed with status", response.status);
-      return NextResponse.json({ error: "Could not generate captions. Try again shortly." }, { status: 502 });
+      const errorBody = await response.json().catch(() => null) as {
+        error?: { message?: string; status?: string };
+      } | null;
+      const details = (errorBody?.error?.message ?? response.statusText)
+        .replace(/AIza[\w-]{20,}/g, "[redacted]")
+        .slice(0, 240);
+      console.error("Gemini generation failed", response.status, errorBody?.error?.status ?? "unknown");
+
+      let reason = `Gemini returned HTTP ${response.status}`;
+      if (response.status === 401 || response.status === 403) {
+        reason += ". Check that GEMINI_API_KEY is valid and has Gemini API access";
+      } else if (response.status === 429) {
+        reason += ". The API quota or rate limit was reached";
+      } else if (response.status >= 500) {
+        reason += ". The Gemini service is temporarily unavailable";
+      }
+      if (details) reason += `: ${details}`;
+      return NextResponse.json({ error: reason }, { status: 502 });
     }
 
     const result = await response.json();
