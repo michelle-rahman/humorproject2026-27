@@ -64,13 +64,13 @@ Never add a Supabase `service_role` key or Google client secret to these app var
 
 ### App routes
 
-- `/` is the public caption list and Google sign-in entry point.
+- `/` is the Google sign-in entry point and the caption feed for signed-in users.
 - `/profile` lets a signed-in user update their first and last name and upload an avatar.
 - `/inside` is protected and redirects signed-out visitors to the home page.
 
 ## Assignment 4: Generate and rate captions
 
-1. Run [`supabase/assignment-4.sql`](supabase/assignment-4.sql) in Supabase SQL Editor after the Assignment 3 SQL. It enables RLS on every existing `public` table and creates the shared caption feed, private prompt details, vote records, vote-count trigger, and generation RPC.
+1. Run [`supabase/assignment-4.sql`](supabase/assignment-4.sql) in Supabase SQL Editor after the Assignment 3 SQL. It enables RLS on every existing `public` table and creates the signed-in-only caption feed, private prompt details, vote records, vote-count trigger, and generation RPC.
 2. Create a Gemini API key in Google AI Studio. This key is different from the Google OAuth client secret used for login.
 3. Add `GEMINI_API_KEY` in Vercel as a server-only variable for Production, Preview, and Development. Add it to `.env.local` for local use. Do not prefix it with `NEXT_PUBLIC_`. You can optionally set `GEMINI_MODEL`; the default is `gemini-3.8-flash`.
 4. Redeploy, sign in with Google, and open `/create`. Enter a campus or New York moment, generate a caption, and publish it to the feed. Signed-in users can then upvote or downvote each caption; their individual votes are private and the public counts are updated by a database trigger.

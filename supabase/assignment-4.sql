@@ -73,12 +73,14 @@ create policy "Users can update their own profile"
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
--- Anyone can read published captions and their aggregate counts. The owner ID
--- is deliberately not selectable; source text and prompts live in a private table.
+-- Signed-in users can read published captions and aggregate counts. The owner
+-- ID is deliberately not selectable; source text and prompts stay private.
+revoke select (id, humor_style, caption_text, upvotes, downvotes, created_at)
+  on public.caption_generations from anon;
 grant select (id, humor_style, caption_text, upvotes, downvotes, created_at)
-  on public.caption_generations to anon, authenticated;
-create policy "Anyone can read generated captions"
-  on public.caption_generations for select to anon, authenticated
+  on public.caption_generations to authenticated;
+create policy "Signed-in users can read generated captions"
+  on public.caption_generations for select to authenticated
   using (true);
 
 -- Owners may inspect their own source and prompt, but cannot insert or mutate
@@ -203,6 +205,5 @@ create trigger caption_votes_update_counts
   after insert or update on public.caption_votes
   for each row execute function public.apply_caption_vote_counts();
 
--- Supabase Storage objects already use RLS. Keep the Assignment 3 avatar
--- policies and ensure row-level security is enabled on the managed object table.
-alter table storage.objects enable row level security;
+-- Supabase Storage manages RLS on storage.objects. Keep the Assignment 3
+-- avatar policies; this project SQL role does not own the managed table.
