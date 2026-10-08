@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const models = [...new Set([model, fallbackModel])];
+    const models = [...new Set([model, fallbackModel, "gemini-3.6-flash"])];
     const deadline = Date.now() + 55_000;
     let response: Response | undefined;
     let lastAttemptTimedOut = false;
@@ -174,8 +174,8 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (response.status !== 503 || index === models.length - 1) break;
-      console.warn("Gemini model unavailable; trying fallback", modelName);
+      if (![429, 503].includes(response.status) || index === models.length - 1) break;
+      console.warn("Gemini model unavailable or rate limited; trying fallback", modelName, response.status);
       await response.body?.cancel();
       response = undefined;
     }
