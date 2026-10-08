@@ -151,7 +151,7 @@ export default function GenerationForm() {
         )}
 
         <label className="form-field" htmlFor="image-context">
-          <span>Context <span className="optional-label">Optional</span></span>
+          <span>Topic or context <span className="optional-label">Optional</span></span>
           <textarea
             id="image-context"
             maxLength={500}
@@ -161,7 +161,7 @@ export default function GenerationForm() {
               setPromptText("");
               setPublished(false);
             }}
-            placeholder="What should the model know?"
+            placeholder="A place, situation, inside joke, or detail to riff on"
             rows={2}
             value={context}
           />
@@ -170,7 +170,7 @@ export default function GenerationForm() {
         {error && <p className="form-message form-error" role="alert">{error}</p>}
 
         <button className="button button-primary generate-button" disabled={working || !photo} type="submit">
-          {working && captions.length === 0 ? "Generating…" : "Generate captions"}
+          {working && captions.length === 0 ? "Giving it a shot…" : "Ask AI for memes"}
         </button>
       </form>
 

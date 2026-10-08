@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { JoinDialog } from "@/app/join-prompt";
 
 type VoteButtonsProps = {
   generationId: string;
@@ -26,9 +26,14 @@ export default function VoteButtons({
   const [currentVote, setCurrentVote] = useState(initialVote);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [joinOpen, setJoinOpen] = useState(false);
 
   async function vote(value: 1 | -1) {
-    if (!signedIn || saving) return;
+    if (!signedIn) {
+      setJoinOpen(true);
+      return;
+    }
+    if (saving) return;
     setSaving(true);
     setMessage(null);
 
@@ -87,7 +92,7 @@ export default function VoteButtons({
         <button
           aria-pressed={currentVote === 1}
           className={`vote-button ${currentVote === 1 ? "is-selected" : ""}`}
-          disabled={!signedIn || saving}
+          disabled={saving}
           onClick={() => vote(1)}
           type="button"
         >
@@ -97,16 +102,17 @@ export default function VoteButtons({
         <button
           aria-pressed={currentVote === -1}
           className={`vote-button ${currentVote === -1 ? "is-selected" : ""}`}
-          disabled={!signedIn || saving}
+          disabled={saving}
           onClick={() => vote(-1)}
           type="button"
         >
           <span aria-hidden="true">↓</span> <span>{downvotes}</span>
           <span className="sr-only">downvotes</span>
         </button>
-        {!signedIn && <Link className="signin-to-vote" href="#top">Sign in to vote</Link>}
+        {!signedIn && <span className="signin-to-vote">Sign in to vote</span>}
       </div>
       {message && <p className="vote-message" role="status">{message}</p>}
+      {joinOpen && <JoinDialog onClose={() => setJoinOpen(false)} />}
     </div>
   );
 }

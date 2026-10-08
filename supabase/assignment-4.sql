@@ -65,11 +65,11 @@ begin
 end;
 $$;
 
--- Meme images are private Storage objects. Signed-in users can view them;
--- users can upload and delete only files in their own folder.
+-- Published meme images are public with the feed. Upload and delete remain
+-- restricted to authenticated users' own folders.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
-  'meme-images', 'meme-images', false, 5242880,
+  'meme-images', 'meme-images', true, 5242880,
   array['image/jpeg', 'image/png', 'image/webp']
 )
 on conflict (id) do update set
@@ -78,9 +78,16 @@ on conflict (id) do update set
   allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "Signed-in users can view meme images" on storage.objects;
-create policy "Signed-in users can view meme images"
-  on storage.objects for select to authenticated
-  using (bucket_id = 'meme-images');
+drop policy if exists "Anyone can view published meme images" on storage.objects;
+create policy "Anyone can view published meme images"
+  on storage.objects for select to anon, authenticated
+  using (
+    bucket_id = 'meme-images'
+    and exists (
+      select 1 from public.caption_generations
+      where caption_generations.image_path = storage.objects.name
+    )
+  );
 
 drop policy if exists "Users can upload their own meme images" on storage.objects;
 create policy "Users can upload their own meme images"
@@ -98,8 +105,8 @@ create policy "Users can delete their own meme images"
     and (storage.foldername(name))[1] = (select auth.uid()::text)
   );
 
--- The old sample archive remains public and read-only. The app feed uses the
--- new caption_generations table below.
+-- Keep the legacy caption archive available to signed-in users only. The app
+-- feed below uses caption_generations and is readable by signed-in and guest users.
 revoke all on public.caption_entries from anon;
 grant select on public.caption_entries to authenticated;
 create policy "Signed-in users can read the caption archive"
@@ -124,9 +131,13 @@ create policy "Users can update their own profile"
 revoke select (id, image_path, humor_style, caption_text, upvotes, downvotes, created_at)
   on public.caption_generations from anon;
 grant select (id, image_path, humor_style, caption_text, upvotes, downvotes, created_at)
+  on public.caption_generations to anon;
+grant select (id, image_path, humor_style, caption_text, upvotes, downvotes, created_at)
   on public.caption_generations to authenticated;
-create policy "Signed-in users can read generated captions"
-  on public.caption_generations for select to authenticated
+drop policy if exists "Signed-in users can read generated captions" on public.caption_generations;
+drop policy if exists "Anyone can read generated captions" on public.caption_generations;
+create policy "Anyone can read generated captions"
+  on public.caption_generations for select to anon, authenticated
   using (true);
 
 -- Owners may inspect their own source and prompt, but cannot insert or mutate

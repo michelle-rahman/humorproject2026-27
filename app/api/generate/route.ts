@@ -40,7 +40,8 @@ export async function POST(request: Request) {
   }
 
   const promptText = [
-    "Look closely at the attached image and write three distinct meme captions about what is actually visible.",
+    "Look closely at the attached image and write three distinct, genuinely funny meme captions about what is actually visible. The goal is to test whether AI can be funny; do not claim that the result is funny or explain the joke.",
+    "Avoid stock meme formats, familiar internet catchphrases, generic observations, and forced punchlines. Prefer precise, surprising details and concise writing. If context is provided, use it as the angle rather than merely repeating it.",
     "Return only valid JSON in this shape: {\"captions\":[{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"},{\"top\":\"...\",\"bottom\":\"...\"}]}.",
     "Each option has a short top line and a short bottom line. Keep the language natural, specific, dry, and concise.",
     "Give each option a different joke or observation. Avoid familiar meme templates, catchphrases, generic campus or city jokes, emojis, hashtags, and forced slang.",
@@ -72,27 +73,23 @@ export async function POST(request: Request) {
           generationConfig: {
             temperature: 1,
             maxOutputTokens: 500,
-            responseFormat: {
-              text: {
-                mimeType: "application/json",
-                schema: {
-                  type: "object",
-                  properties: {
-                    captions: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          top: { type: "string" },
-                          bottom: { type: "string" },
-                        },
-                        required: ["top", "bottom"],
-                      },
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                captions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      top: { type: "string" },
+                      bottom: { type: "string" },
                     },
+                    required: ["top", "bottom"],
                   },
-                  required: ["captions"],
                 },
               },
+              required: ["captions"],
             },
           },
         }),
