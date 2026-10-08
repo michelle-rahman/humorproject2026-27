@@ -108,17 +108,22 @@ export async function POST(request: Request) {
     const model = process.env.GEMINI_MODEL || "gemini-3.8-flash";
     const fallbackModel = process.env.GEMINI_FALLBACK_MODEL ||
       (model === "gemini-3.7-flash" ? "gemini-3.6-flash" : "gemini-3.7-flash");
-    const requestBody = JSON.stringify({
-      contents: [{
-        role: "user",
-        parts: [
-          ...(image && base64Image ? [{ inline_data: { mime_type: image.type, data: base64Image } }] : []),
-          { text: promptText },
-        ],
-      }],
+    const contents = [{
+      role: "user",
+      parts: [
+        ...(image && base64Image ? [{ inline_data: { mime_type: image.type, data: base64Image } }] : []),
+        { text: promptText },
+      ],
+    }];
+    const makeRequestBody = (modelName: string) => JSON.stringify({
+      contents,
       generationConfig: {
-        temperature: 1,
-        maxOutputTokens: 500,
+        // Gemini 3 counts its reasoning tokens against maxOutputTokens. Keep
+        // reasoning light so the model has room to finish the structured result.
+        ...(modelName.startsWith("gemini-3.")
+          ? { thinkingConfig: { thinkingLevel: "low" } }
+          : {}),
+        maxOutputTokens: 1200,
         responseMimeType: "application/json",
         responseSchema: {
           type: "object",
@@ -152,7 +157,7 @@ export async function POST(request: Request) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: requestBody,
+          body: makeRequestBody(modelName),
           cache: "no-store",
           signal: AbortSignal.timeout(Math.min(remainingMs, 30_000)),
         },
@@ -193,6 +198,7 @@ export async function POST(request: Request) {
 
     let result: {
       candidates?: Array<{
+        finishReason?: string;
         content?: { parts?: Array<{ text?: string }> };
       }>;
     };
@@ -209,6 +215,7 @@ export async function POST(request: Request) {
       ?.map((part: { text?: string }) => part.text ?? "")
       .join("")
       .trim();
+    const finishReason = result.candidates?.[0]?.finishReason;
     if (!rawText) {
       return NextResponse.json({ error: "No captions came back. Try another image." }, { status: 502 });
     }
@@ -217,9 +224,12 @@ export async function POST(request: Request) {
     try {
       parsed = parseJsonObject(rawText) as { captions?: CaptionOption[] };
     } catch {
-      console.error("Gemini returned invalid JSON for generated captions");
+      console.error("Gemini returned invalid JSON for generated captions", finishReason ?? "unknown finish reason");
+      const error = finishReason === "MAX_TOKENS"
+        ? "Gemini stopped before finishing the captions. Please try again."
+        : "Gemini's response did not contain complete caption data. Please try again.";
       return NextResponse.json(
-        { error: "Gemini's response did not contain complete caption data. Please try again." },
+        { error },
         { status: 502 },
       );
     }
