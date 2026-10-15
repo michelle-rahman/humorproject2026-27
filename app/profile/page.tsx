@@ -31,7 +31,9 @@ export default async function ProfilePage() {
           non-human memes
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
-          <Link href="/inside">Members</Link>
+          <Link href="/#collection-heading">Feed</Link>
+          <Link href="/create">Create</Link>
+          <Link className="nav-current" aria-current="page" href="/profile">Profile</Link>
           <SignOutButton />
         </nav>
       </header>
