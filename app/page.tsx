@@ -99,6 +99,8 @@ export default async function Home({
         <div className="home-header-right">
           {user ? (
             <nav className="account-nav" aria-label="Account navigation">
+              <Link className="nav-current" aria-current="page" href="/#collection-heading">Feed</Link>
+              <Link href="/create">Create</Link>
               <Link href="/profile">Profile</Link>
               <SignOutButton />
             </nav>
