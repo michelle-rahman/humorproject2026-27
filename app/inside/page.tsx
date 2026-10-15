@@ -63,7 +63,7 @@ export default async function MembersPage() {
       </section>
 
       <footer className="site-footer">
-        <Link href="/">Back to feed</Link>
+        <Link className="button button-primary back-to-feed" href="/">← Back to feed</Link>
         <span>non-human memes</span>
       </footer>
     </main>
