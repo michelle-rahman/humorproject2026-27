@@ -88,7 +88,8 @@ export default function VoteButtons({
 
   return (
     <div className="vote-area">
-      <div className="vote-controls" aria-label="Rate this meme">
+      <p className="vote-prompt">Does it land?</p>
+      <div className="vote-controls" role="group" aria-label="Rate this AI caption">
         <button
           aria-pressed={currentVote === 1}
           className={`vote-button ${currentVote === 1 ? "is-selected" : ""}`}
@@ -96,7 +97,9 @@ export default function VoteButtons({
           onClick={() => vote(1)}
           type="button"
         >
-          <span aria-hidden="true">↑</span> <span>{upvotes}</span>
+          <span aria-hidden="true">↑</span>
+          <span className="vote-label">Funny</span>
+          <span>{upvotes}</span>
           <span className="sr-only">upvotes</span>
         </button>
         <button
@@ -106,7 +109,9 @@ export default function VoteButtons({
           onClick={() => vote(-1)}
           type="button"
         >
-          <span aria-hidden="true">↓</span> <span>{downvotes}</span>
+          <span aria-hidden="true">↓</span>
+          <span className="vote-label">Not funny</span>
+          <span>{downvotes}</span>
           <span className="sr-only">downvotes</span>
         </button>
         {!signedIn && <span className="signin-to-vote">Sign in to vote</span>}
