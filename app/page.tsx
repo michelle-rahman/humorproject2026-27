@@ -23,6 +23,14 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function feedHref(format: string, sort: string) {
+  const query = new URLSearchParams();
+  if (format !== "all") query.set("format", format);
+  if (sort !== "newest") query.set("sort", sort);
+  const search = query.toString();
+  return `/${search ? `?${search}` : ""}#collection-heading`;
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -30,6 +38,10 @@ export default async function Home({
 }) {
   const params = await searchParams;
   const showWelcome = params.welcome === "1";
+  const rawFormat = Array.isArray(params.format) ? params.format[0] : params.format;
+  const rawSort = Array.isArray(params.sort) ? params.sort[0] : params.sort;
+  const format = rawFormat === "images" || rawFormat === "captions" ? rawFormat : "all";
+  const sort = rawSort === "top" ? "top" : "newest";
   let user: User | null = null;
   let generations: CaptionGeneration[] = [];
   let votesByGeneration: Record<string, number> = {};
@@ -59,11 +71,15 @@ export default async function Home({
       );
     }
 
-    const { data, error } = await supabase
+    let feedQuery = supabase
       .from("caption_generations")
-      .select("id,image_path,caption_text,humor_style,upvotes,downvotes,created_at")
-      .order("created_at", { ascending: false })
-      .limit(30);
+      .select("id,image_path,caption_text,humor_style,upvotes,downvotes,created_at");
+    if (format === "images") feedQuery = feedQuery.not("image_path", "is", null);
+    if (format === "captions") feedQuery = feedQuery.is("image_path", null);
+    const orderedFeed = sort === "top"
+      ? feedQuery.order("upvotes", { ascending: false }).order("created_at", { ascending: false })
+      : feedQuery.order("created_at", { ascending: false });
+    const { data, error } = await orderedFeed.limit(30);
 
     if (error) throw error;
     generations = (data ?? []) as CaptionGeneration[];
@@ -97,7 +113,7 @@ export default async function Home({
             Welcome back{firstName ? `, ${firstName}` : ""}.
           </p>
         )}
-        <p className="intro-copy">Give AI a topic, or add an image and context. It makes the meme; you be the judge.</p>
+        <p className="intro-copy">AI makes the captions; people decide if they land. Browse the feed, rate each attempt, or create one of your own.</p>
         {user ? (
           <Link className="button button-primary hero-cta" href="/create">Create a meme</Link>
         ) : (
@@ -109,9 +125,45 @@ export default async function Home({
         <div className="section-heading">
           <div>
             <p className="eyebrow">FEED</p>
-            <h2 id="collection-heading">The feed</h2>
-            <p className="feed-description">Text-only captions and image memes, rated by people.</p>
+            <h2 id="collection-heading">The community feed</h2>
+            <p className="feed-description">Your votes shape which AI attempts rise to the top.</p>
           </div>
+        </div>
+
+        <div className="feed-controls">
+          <nav className="feed-filter" aria-label="Filter feed by format">
+            {[
+              ["all", "All"],
+              ["images", "Image memes"],
+              ["captions", "Caption only"],
+            ].map(([value, label]) => (
+              <Link
+                aria-current={format === value ? "page" : undefined}
+                className="feed-control-link"
+                href={feedHref(value, sort)}
+                key={value}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <nav className="feed-sort" aria-label="Sort feed">
+            <span className="feed-control-label">Sort</span>
+            <Link
+              aria-current={sort === "newest" ? "page" : undefined}
+              className="feed-control-link"
+              href={feedHref(format, "newest")}
+            >
+              Newest
+            </Link>
+            <Link
+              aria-current={sort === "top" ? "page" : undefined}
+              className="feed-control-link"
+              href={feedHref(format, "top")}
+            >
+              Most upvoted
+            </Link>
+          </nav>
         </div>
 
         {feedError ? (
@@ -125,8 +177,9 @@ export default async function Home({
         ) : generations.length === 0 ? (
           <div className="message-card empty-feed">
             <div>
-              <h3>No memes yet.</h3>
-              {user ? <Link className="text-link" href="/create">Create a meme</Link> : <JoinPrompt className="text-link" label="Create a meme" />}
+              <h3>{format === "images" ? "No image memes yet." : format === "captions" ? "No caption-only posts yet." : "No memes yet."}</h3>
+              <p className="empty-feed-copy">Try another view, or be the first to put AI's humor to a vote.</p>
+              {user ? <Link className="text-link" href="/create">Create a post</Link> : <JoinPrompt className="text-link" label="Create a post" />}
             </div>
           </div>
         ) : (
