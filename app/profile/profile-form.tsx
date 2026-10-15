@@ -9,6 +9,7 @@ type ProfileFormProps = {
   initialFirstName: string;
   initialLastName: string;
   initialAvatarUrl: string | null;
+  isFirstProfileSetup: boolean;
 };
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -19,6 +20,7 @@ export default function ProfileForm({
   initialFirstName,
   initialLastName,
   initialAvatarUrl,
+  isFirstProfileSetup,
 }: ProfileFormProps) {
   const router = useRouter();
   const [firstName, setFirstName] = useState(initialFirstName);
@@ -101,6 +103,12 @@ export default function ProfileForm({
     if (updateError) {
       setError(`Could not save your profile: ${updateError.message}`);
       setSaving(false);
+      return;
+    }
+
+    if (isFirstProfileSetup) {
+      setSaving(false);
+      router.replace("/?profile=complete#top");
       return;
     }
 
