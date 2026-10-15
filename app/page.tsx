@@ -38,6 +38,7 @@ export default async function Home({
 }) {
   const params = await searchParams;
   const showWelcome = params.welcome === "1";
+  const profileComplete = params.profile === "complete";
   const rawFormat = Array.isArray(params.format) ? params.format[0] : params.format;
   const rawSort = Array.isArray(params.sort) ? params.sort[0] : params.sort;
   const format = rawFormat === "images" || rawFormat === "captions" ? rawFormat : "all";
@@ -115,9 +116,22 @@ export default async function Home({
         )}
         <p className="intro-copy">AI makes the captions; people decide if they land. Browse the feed, rate each attempt, or create one of your own.</p>
         {user ? (
-          <Link className="button button-primary hero-cta" href="/create">Create a meme</Link>
+          !profileComplete && <Link className="button button-primary hero-cta" href="/create">Create a meme</Link>
         ) : (
           <JoinPrompt className="button button-primary hero-cta" label="Create a meme" />
+        )}
+        {user && profileComplete && (
+          <aside className="profile-next-step" role="status">
+            <div>
+              <p className="eyebrow">PROFILE SAVED</p>
+              <h2>What would you like to do next?</h2>
+              <p>Make an AI caption or meme, or rate posts in the community feed.</p>
+            </div>
+            <div className="profile-next-step-actions">
+              <Link className="button button-primary" href="/create">Create a meme</Link>
+              <Link className="button profile-feed-action" href="#collection-heading">Rate the feed</Link>
+            </div>
+          </aside>
         )}
       </section>
 
