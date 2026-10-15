@@ -68,7 +68,7 @@ export default async function ProfilePage() {
       </section>
 
       <footer className="site-footer">
-        <Link href="/">Back to feed</Link>
+        <Link className="button button-primary back-to-feed" href="/">← Back to feed</Link>
         <span>non-human memes · Profile</span>
       </footer>
     </main>
