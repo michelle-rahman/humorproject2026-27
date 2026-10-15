@@ -226,6 +226,9 @@ a { color: inherit; text-decoration: none; }
 .button-primary { background: #191919; }
 .button-primary:hover:not(:disabled) { background: #444; }
 .account-nav { gap: 18px; }
+.account-nav > a { display: inline-flex; min-height: 38px; align-items: center; }
+.account-nav > .nav-current { color: #191919; font-weight: 700; }
+
 .collection { padding-top: 42px; }
 .section-heading { align-items: center; margin-bottom: 18px; }
 .feed-description { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
