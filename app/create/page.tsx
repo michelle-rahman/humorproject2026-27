@@ -17,6 +17,8 @@ export default async function CreatePage() {
           non-human memes
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
+          <Link href="/#collection-heading">Feed</Link>
+          <Link className="nav-current" aria-current="page" href="/create">Create</Link>
           <Link href="/profile">Profile</Link>
           <SignOutButton />
         </nav>
