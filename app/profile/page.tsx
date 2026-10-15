@@ -63,6 +63,7 @@ export default async function ProfilePage() {
           initialFirstName={firstName}
           initialLastName={lastName}
           initialAvatarUrl={profile?.avatar_url ?? null}
+          isFirstProfileSetup={profileNeedsNames}
         />
       </section>
 
