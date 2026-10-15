@@ -24,8 +24,10 @@ export default async function MembersPage() {
           non-human memes
         </Link>
         <nav className="account-nav" aria-label="Account navigation">
-          <Link href="/">Feed</Link>
+          <Link href="/#collection-heading">Feed</Link>
+          <Link href="/create">Create</Link>
           <Link href="/profile">Profile</Link>
+          <Link className="nav-current" aria-current="page" href="/inside">Members</Link>
           <SignOutButton />
         </nav>
       </header>
